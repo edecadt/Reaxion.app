@@ -1,0 +1,21 @@
+# Reduce Docker build context
+node_modules
+**/node_modules
+.git
+.gitignore
+**/.turbo
+**/.next
+**/dist
+**/build
+**/.expo
+**/.cache
+**/.pnpm-store
+**/.DS_Store
+**/android/app/build
+**/ios/build
+**/.gradle
+**/.idea
+**/.vscode
+tmp
+.env*
+docker-compose.override.yml
