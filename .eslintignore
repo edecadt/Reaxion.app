@@ -1,0 +1,14 @@
+# Ignorer les configs et tooling
+commitlint.config.js
+eslint.config.cjs
+*.config.js
+*.config.cjs
+
+# Déjà ignorés
+node_modules
+dist
+build
+coverage
+.turbo
+.next
+out

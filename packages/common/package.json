@@ -1,0 +1,20 @@
+{
+  "name": "@reaxion/common",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@reaxion/eslint-config": "workspace:*",
+    "@reaxion/typescript-config": "workspace:*"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "apps/**/*.{js,ts,jsx,tsx}": [
+    "turbo run lint --filter='./apps/*' -- --fix",
+    "prettier --write"
+  ],
+  "packages/**/*.{js,ts,jsx,tsx}": [
+    "turbo run lint --filter='./packages/*' -- --fix",
+    "prettier --write"
+  ],
+  "*.{json,md,yml,yaml}": ["prettier --write"]
+}
