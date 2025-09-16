@@ -1,4 +1,3 @@
-# Reduce Docker build context
 node_modules
 **/node_modules
 .git
