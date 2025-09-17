@@ -2,11 +2,18 @@ node_modules
 .pnp
 .pnp.js
 
+# Environment files
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+
+# Keep example file
+!.env.example
 
 coverage
 .nyc_output
