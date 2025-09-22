@@ -26,6 +26,7 @@ function loadEnvFile(filePath) {
     console.log(`${LOGGER_PREFIX} env candidate missing: ${filePath}`);
     return;
   }
+
   try {
     const content = readFileSync(filePath, 'utf8');
     content.split(/\r?\n/).forEach((line) => {
@@ -38,8 +39,9 @@ function loadEnvFile(filePath) {
         return;
       }
       const key = trimmed.slice(0, separatorIndex).trim();
-      const value = trimmed.slice(separatorIndex + 1).trim();
-      env[key] = value.replace(/^['"]|['"]$/g, '');
+      const rawValue = trimmed.slice(separatorIndex + 1).trim();
+      const value = rawValue.replace(/^['"]|['"]$/g, '');
+      env[key] = value;
     });
     console.log(`${LOGGER_PREFIX} loaded env file: ${filePath}`);
   } catch (error) {
@@ -54,7 +56,14 @@ env.PORT = desiredPort;
 env.EXPO_DEV_SERVER_PORT = desiredPort;
 env.EXPO_METRO_PORT = desiredPort;
 
-console.log(`${LOGGER_PREFIX} starting Expo on port ${env.EXPO_DEV_SERVER_PORT}`);
+if (env.NEXT_PUBLIC_API_URL && !env.EXPO_PUBLIC_API_URL) {
+  env.EXPO_PUBLIC_API_URL = env.NEXT_PUBLIC_API_URL;
+  console.log(
+    `${LOGGER_PREFIX} mapped NEXT_PUBLIC_API_URL to EXPO_PUBLIC_API_URL for Metro`,
+  );
+}
+
+console.log(`${LOGGER_PREFIX} starting Expo on port ${desiredPort}`);
 
 const expoBin = resolve(
   projectRoot,
@@ -68,7 +77,7 @@ if (!existsSync(expoBin)) {
   process.exit(1);
 }
 
-const child = spawn(expoBin, ['start', '--port', env.EXPO_DEV_SERVER_PORT], {
+const child = spawn(expoBin, ['start', '--port', desiredPort], {
   stdio: 'inherit',
   env,
 });
