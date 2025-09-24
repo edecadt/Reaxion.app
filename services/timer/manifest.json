@@ -1,89 +1,62 @@
 {
-  "name": "timer",
-  "id": "service.timer",
+  "id": "timer",
+  "name": "Timer",
   "version": "1.0.0",
   "description": "The Timer service allows workflows to be triggered at specific times, intervals, or after countdowns.",
   "logo": "https://cdn-icons-png.flaticon.com/512/1827/1827504.png",
-  "auth": {
-    "type": "none"
-  },
+  "auth": "none",
   "actions": [
     {
-      "id": "timer.every_minute",
-      "name": "every_minute",
-      "description": "Triggered every minute.",
+      "id": "every_minute",
+      "name": "Every Minute",
+      "description": "Triggered every minute",
       "input": {},
       "output": {
         "timestamp": "number"
       }
     },
     {
-      "id": "timer.at_time",
-      "name": "at_time",
-      "description": "Triggered at a specific time of day.",
+      "id": "at_time",
+      "name": "At Time",
+      "description": "Triggered at a specific time of day (HH:mm)",
       "input": {
-        "time": {
-          "type": "string",
-          "format": "HH:mm",
-          "description": "Time of day in 24h format (e.g., 14:30)."
-        }
+        "time": "string"
       },
       "output": {
         "triggered_at": "string"
       }
     },
     {
-      "id": "timer.every_day",
-      "name": "every_day",
-      "description": "Triggered once every day at a specific time.",
+      "id": "every_day",
+      "name": "Every Day",
+      "description": "Triggered once every day at a specific time",
       "input": {
-        "time": {
-          "type": "string",
-          "format": "HH:mm",
-          "description": "Time of day in 24h format."
-        }
+        "time": "string"
       },
       "output": {
-        "date": {
-          "type": "string",
-          "format": "YYYY-MM-DD"
-        },
-        "time": {
-          "type": "string",
-          "format": "HH:mm"
-        }
+        "date": "string",
+        "time": "string"
       }
     },
     {
-      "id": "timer.countdown",
-      "name": "countdown",
-      "description": "Triggered after a countdown in seconds.",
+      "id": "countdown",
+      "name": "Countdown",
+      "description": "Triggered after a countdown in seconds",
       "input": {
-        "seconds": {
-          "type": "number",
-          "minimum": 1,
-          "description": "Countdown duration in seconds."
-        }
+        "seconds": "number"
       },
       "output": {
-        "finished_at": {
-          "type": "string",
-          "format": "ISO8601"
-        }
+        "finished_at": "string"
       }
     }
   ],
   "reactions": [
     {
-      "id": "timer.wait",
-      "name": "wait",
-      "description": "Pause workflow execution for N seconds.",
+      "id": "wait",
+      "name": "Wait",
+      "description": "Pause workflow execution for N seconds",
       "input": {
-        "seconds": {
-          "type": "number",
-          "minimum": 1,
-          "description": "Number of seconds to wait."
-        }
+        "seconds": "number"
       },
       "output": {
         "completed": "boolean"
