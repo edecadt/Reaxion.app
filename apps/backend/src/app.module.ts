@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { ServiceLoader } from './services/service-loader.service';
+import { ServiceRegistry } from './services/service-registry.service';
 
 @Module({
   imports: [
@@ -25,6 +27,6 @@ import { AuthModule } from './auth/auth.module';
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ServiceLoader, ServiceRegistry],
 })
 export class AppModule {}
