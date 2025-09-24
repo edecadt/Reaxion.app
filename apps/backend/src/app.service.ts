@@ -1,51 +1,25 @@
 import { Injectable } from '@nestjs/common';
 
-type SupportedService = {
-  name: string;
-  actions: Array<{ name: string; description: string }>;
-  reactions: Array<{ name: string; description: string }>;
-};
+import { ServiceRegistry } from './services/service-registry.service';
 
 @Injectable()
 export class AppService {
-  private readonly services: SupportedService[] = [
-    {
-      name: 'facebook',
-      actions: [
-        {
-          name: 'new_post',
-          description: 'Triggered when a user publishes a new post.',
-        },
-        {
-          name: 'new_comment',
-          description: 'Triggered when a comment is added to a post.',
-        },
-      ],
-      reactions: [
-        {
-          name: 'send_email',
-          description: 'Send an email notification to subscribed users.',
-        },
-        {
-          name: 'save_to_archive',
-          description: 'Archive the event inside the dashboard.',
-        },
-      ],
-    },
-  ];
+  constructor(private readonly serviceRegistry: ServiceRegistry) {}
 
   getHello(): string {
     return 'Hello World!';
   }
 
   buildAboutPayload(clientHost: string | undefined) {
+    const services = this.serviceRegistry.getPublicServices();
+
     return {
       client: {
         host: clientHost ?? '',
       },
       server: {
         current_time: Math.floor(Date.now() / 1000),
-        services: this.services,
+        services,
       },
     };
   }
