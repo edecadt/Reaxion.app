@@ -1,0 +1,94 @@
+{
+  "name": "timer",
+  "id": "service.timer",
+  "version": "1.0.0",
+  "description": "The Timer service allows workflows to be triggered at specific times, intervals, or after countdowns.",
+  "logo": "https://cdn-icons-png.flaticon.com/512/1827/1827504.png",
+  "auth": {
+    "type": "none"
+  },
+  "actions": [
+    {
+      "id": "timer.every_minute",
+      "name": "every_minute",
+      "description": "Triggered every minute.",
+      "input": {},
+      "output": {
+        "timestamp": "number"
+      }
+    },
+    {
+      "id": "timer.at_time",
+      "name": "at_time",
+      "description": "Triggered at a specific time of day.",
+      "input": {
+        "time": {
+          "type": "string",
+          "format": "HH:mm",
+          "description": "Time of day in 24h format (e.g., 14:30)."
+        }
+      },
+      "output": {
+        "triggered_at": "string"
+      }
+    },
+    {
+      "id": "timer.every_day",
+      "name": "every_day",
+      "description": "Triggered once every day at a specific time.",
+      "input": {
+        "time": {
+          "type": "string",
+          "format": "HH:mm",
+          "description": "Time of day in 24h format."
+        }
+      },
+      "output": {
+        "date": {
+          "type": "string",
+          "format": "YYYY-MM-DD"
+        },
+        "time": {
+          "type": "string",
+          "format": "HH:mm"
+        }
+      }
+    },
+    {
+      "id": "timer.countdown",
+      "name": "countdown",
+      "description": "Triggered after a countdown in seconds.",
+      "input": {
+        "seconds": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Countdown duration in seconds."
+        }
+      },
+      "output": {
+        "finished_at": {
+          "type": "string",
+          "format": "ISO8601"
+        }
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "id": "timer.wait",
+      "name": "wait",
+      "description": "Pause workflow execution for N seconds.",
+      "input": {
+        "seconds": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Number of seconds to wait."
+        }
+      },
+      "output": {
+        "completed": "boolean"
+      }
+    }
+  ],
+  "webhooks": []
+}
