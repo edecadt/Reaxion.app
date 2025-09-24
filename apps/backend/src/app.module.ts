@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AppService } from './app.service';
         resolve(process.cwd(), '.env'),
       ],
     }),
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
