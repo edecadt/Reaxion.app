@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { ServiceLoader } from './services/service-loader.service';
 import { ServiceRegistry } from './services/service-registry.service';
 
@@ -23,6 +24,7 @@ import { ServiceRegistry } from './services/service-registry.service';
         resolve(process.cwd(), '.env'),
       ],
     }),
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService, ServiceLoader, ServiceRegistry],

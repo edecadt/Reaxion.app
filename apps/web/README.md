@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reaxion Web Client
 
-## Getting Started
+Next.js 15 interface for Reaxion.app with a Shadcn-inspired component system built on Tailwind CSS v4.
 
-First, run the development server:
+## Tech stack
+
+- **Next.js 15** with the App Router and Turbopack dev server
+- **Tailwind CSS v4** using CSS variables for theming
+- **Custom Shadcn-style components** in `src/components/ui`
+- **Local storage auth context** for lightweight session persistence
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm --filter web dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The web client reads the backend endpoint from `NEXT_PUBLIC_API_URL` (see `apps/web/.env`). The default is `http://localhost:8080`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Linting & formatting
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm --filter web lint
+pnpm format # runs repo-wide prettier rules
+```
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+- `src/app` – Next.js routes and layouts
+- `src/components/ui` – Reusable UI primitives mirroring Shadcn APIs (button, card, input, badge, alert, …)
+- `src/lib/api.ts` – REST helper for talking to the Nest backend
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Styling guidelines
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Components consume design tokens via CSS variables (`--primary`, `--foreground`, etc.) defined in `src/app/globals.css`
+- Prefer using the primitives from `src/components/ui` instead of raw Tailwind classes for consistency
 
-## Deploy on Vercel
+## Auth flow
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Registration and login POST to the Nest `/auth` endpoints and persist the returned `{ token, user }` payload in `localStorage`. The navbar reflects the current session instantly.
