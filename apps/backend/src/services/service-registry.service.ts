@@ -4,7 +4,8 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { FSWatcher, watch } from 'node:fs';
+import { existsSync, FSWatcher, watch } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import {
   LoadedService,
@@ -14,6 +15,7 @@ import {
   ServiceManifest,
 } from './manifest.types';
 import { ServiceLoader } from './service-loader.service';
+import type { PluginHandler } from './plugin.types';
 
 type ActionRegistryEntry = {
   serviceId: string;
@@ -36,6 +38,7 @@ type RegistrySnapshot = {
   reactionsById: ReadonlyMap<string, ReactionRegistryEntry>;
   webhooksByService: ReadonlyMap<string, WebhookRegistry>;
   handlerPaths: ReadonlyMap<string, string | null>;
+  handlers: ReadonlyMap<string, PluginHandler>;
 };
 
 const composeKey = (serviceId: string, itemId: string): string =>
@@ -50,6 +53,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
   private reactionsById = new Map<string, ReactionRegistryEntry>();
   private webhooksByService = new Map<string, WebhookRegistry>();
   private handlerPaths = new Map<string, string | null>();
+  private handlers = new Map<string, PluginHandler>();
   private watchers: FSWatcher[] = [];
   private refreshTimer: NodeJS.Timeout | null = null;
   private refreshInFlight: Promise<void> | null = null;
@@ -84,6 +88,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
       reactionsById: this.reactionsById,
       webhooksByService: this.webhooksByService,
       handlerPaths: this.handlerPaths,
+      handlers: this.handlers,
     };
   }
 
@@ -109,6 +114,10 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     return this.handlerPaths.get(serviceId);
   }
 
+  getHandler(serviceId: string): PluginHandler | undefined {
+    return this.handlers.get(serviceId);
+  }
+
   private async refresh(): Promise<void> {
     if (this.refreshInFlight) {
       await this.refreshInFlight;
@@ -117,8 +126,8 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
 
     this.refreshInFlight = this.loader
       .discover()
-      .then((services) => {
-        this.materialize(services);
+      .then(async (services) => {
+        await this.materialize(services);
       })
       .catch((error) => {
         this.logger.error(`Failed to refresh services: ${error.message}`);
@@ -131,16 +140,22 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     await this.refreshInFlight;
   }
 
-  private materialize(services: LoadedService[]): void {
+  private async materialize(services: LoadedService[]): Promise<void> {
     const servicesById = new Map<string, LoadedService>();
     const actionsById = new Map<string, ActionRegistryEntry>();
     const reactionsById = new Map<string, ReactionRegistryEntry>();
     const webhooksByService = new Map<string, WebhookRegistry>();
     const handlerPaths = new Map<string, string | null>();
+    const handlers = new Map<string, PluginHandler>();
 
     for (const service of services) {
       servicesById.set(service.id, service);
       handlerPaths.set(service.id, service.handlerPath);
+
+      const handler = await this.loadHandlerForService(service);
+      if (handler) {
+        handlers.set(service.id, handler);
+      }
 
       for (const action of service.actions) {
         const key = composeKey(service.id, action.id);
@@ -187,15 +202,128 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     this.reactionsById = reactionsById;
     this.webhooksByService = webhooksByService;
     this.handlerPaths = handlerPaths;
+    this.handlers = handlers;
 
     this.logger.log(`Loaded ${services.length} services from manifests`);
     this.registerWatchers();
+  }
+
+  private async loadHandlerForService(
+    service: LoadedService,
+  ): Promise<PluginHandler | null> {
+    if (!service.handlerPath) {
+      if (
+        service.actions.length > 0 ||
+        service.reactions.length > 0 ||
+        service.webhooks.length > 0
+      ) {
+        throw new Error(
+          `Service ${service.id} declares capabilities but has no handler module`,
+        );
+      }
+
+      return null;
+    }
+
+    if (!existsSync(service.handlerPath)) {
+      throw new Error(
+        `Handler module not found for service ${service.id} at ${service.handlerPath}`,
+      );
+    }
+
+    try {
+      const moduleUrl = pathToFileURL(service.handlerPath);
+      moduleUrl.searchParams.set('t', Date.now().toString());
+      const moduleExports = await import(moduleUrl.href);
+      return this.resolveHandlerExport(
+        service.id,
+        service.handlerPath,
+        moduleExports,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to load handler for service ${service.id}: ${message}`,
+      );
+    }
+  }
+
+  private resolveHandlerExport(
+    serviceId: string,
+    handlerPath: string,
+    moduleExports: unknown,
+  ): PluginHandler {
+    let candidate = moduleExports as unknown;
+
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'default' in (candidate as Record<string, unknown>)
+    ) {
+      candidate = (candidate as Record<string, unknown>).default;
+    }
+
+    if (typeof candidate === 'function') {
+      try {
+        candidate = (candidate as () => unknown)();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Handler factory for service ${serviceId} threw: ${message}`,
+        );
+      }
+    }
+
+    if (!candidate || typeof candidate !== 'object') {
+      throw new Error(
+        `Handler at ${handlerPath} for service ${serviceId} must export an object implementing PluginHandler`,
+      );
+    }
+
+    const handler = candidate as Record<string, unknown>;
+
+    this.assertHandlerFunction(handler, 'detect', serviceId, false);
+    this.assertHandlerFunction(handler, 'execute', serviceId, false);
+    this.assertHandlerFunction(handler, 'onConnect', serviceId, true);
+    this.assertHandlerFunction(handler, 'onDisconnect', serviceId, true);
+    this.assertHandlerFunction(handler, 'onWebhook', serviceId, true);
+
+    return handler as unknown as PluginHandler;
+  }
+
+  private assertHandlerFunction(
+    handler: Record<string, unknown>,
+    key: string,
+    serviceId: string,
+    optional: boolean,
+  ): void {
+    const value = handler[key];
+
+    if (value === undefined) {
+      if (!optional) {
+        throw new Error(
+          `Handler for service ${serviceId} is missing required method "${key}"`,
+        );
+      }
+
+      return;
+    }
+
+    if (typeof value !== 'function') {
+      throw new Error(
+        `Handler method "${key}" for service ${serviceId} must be a function`,
+      );
+    }
   }
 
   private registerWatchers(): void {
     this.disposeWatchers();
 
     const register = (target: string) => {
+      if (!existsSync(target)) {
+        return;
+      }
+
       try {
         const watcher = watch(target, () => this.scheduleRefresh());
         watcher.on('error', (error) => {
@@ -212,10 +340,16 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
       }
     };
 
-    register(this.loader.root);
+    if (existsSync(this.loader.root)) {
+      register(this.loader.root);
+    }
 
     for (const service of this.services) {
+      register(service.servicePath);
       register(service.manifestPath);
+      if (service.handlerPath) {
+        register(service.handlerPath);
+      }
     }
   }
 
