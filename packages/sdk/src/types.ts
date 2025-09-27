@@ -1,0 +1,170 @@
+export type ParameterSchema = Record<
+  string,
+  "string" | "number" | "boolean" | "object"
+>;
+
+export type ServiceContext = {
+  serviceId: string;
+  userId?: string;
+  logger?: {
+    log?: (message: string, context?: string) => void;
+    error?: (message: string, context?: string) => void;
+    warn?: (message: string, context?: string) => void;
+  };
+  connection?: {
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date | string | null;
+    scopes?: string[];
+    metadata?: Record<string, unknown>;
+  };
+  state?: Record<string, unknown>;
+};
+
+export type ActionContext = ServiceContext & {
+  actionId: string;
+  params: Record<string, unknown>;
+};
+
+export type ReactionContext = ServiceContext & {
+  reactionId: string;
+  params: Record<string, unknown>;
+  previousOutput?: Record<string, unknown> | null;
+};
+
+export type WebhookContext = ServiceContext & {
+  event: string;
+  payload: unknown;
+  rawRequest?: {
+    headers?: Record<string, string | string[]>;
+    query?: Record<string, string | string[]>;
+  };
+};
+
+export type ActionDefinition<
+  TInput extends ParameterSchema = ParameterSchema,
+  TOutput extends ParameterSchema = ParameterSchema,
+> = {
+  id: string;
+  name: string;
+  description: string;
+  input?: TInput;
+  output?: TOutput;
+  run: (
+    params: Record<keyof TInput, unknown>,
+    ctx: ActionContext,
+  ) =>
+    | Promise<Record<keyof TOutput, unknown> | null>
+    | Record<keyof TOutput, unknown>
+    | null;
+};
+
+export type ReactionDefinition<
+  TInput extends ParameterSchema = ParameterSchema,
+  TOutput extends ParameterSchema = ParameterSchema,
+> = {
+  id: string;
+  name: string;
+  description: string;
+  input?: TInput;
+  output?: TOutput;
+  run: (
+    params: Record<keyof TInput, unknown>,
+    ctx: ReactionContext,
+  ) => Promise<Record<keyof TOutput, unknown>> | Record<keyof TOutput, unknown>;
+};
+
+export type WebhookDefinition<
+  TOutput extends ParameterSchema = ParameterSchema,
+> = {
+  id: string;
+  name: string;
+  description: string;
+  output?: TOutput;
+  run: (
+    event: string,
+    payload: unknown,
+    ctx: WebhookContext,
+  ) =>
+    | Promise<Record<keyof TOutput, unknown> | null>
+    | Record<keyof TOutput, unknown>
+    | null;
+};
+
+export type AuthConfig = {
+  type: "none" | "oauth2" | "api_key";
+  scopes?: string[];
+  authUrl?: string;
+  tokenUrl?: string;
+  clientId?: string;
+};
+
+export type ServiceDefinition = {
+  id: string;
+  name: string;
+  version?: string;
+  description: string;
+  logo: string;
+  auth: AuthConfig;
+  actions?: ActionDefinition[];
+  reactions?: ReactionDefinition[];
+  webhooks?: WebhookDefinition[];
+  onConnect?: (ctx: ServiceContext) => Promise<void> | void;
+  onDisconnect?: (ctx: ServiceContext) => Promise<void> | void;
+};
+
+export type CreatedService = ServiceDefinition & {
+  __isSDKService: true;
+  getManifest(): ServiceManifest;
+  getHandler(): ServiceHandler;
+};
+
+export type ServiceManifest = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  logo: string;
+  auth: string;
+  actions: Array<{
+    id: string;
+    name: string;
+    description: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
+  }>;
+  reactions: Array<{
+    id: string;
+    name: string;
+    description: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
+  }>;
+  webhooks: Array<{
+    id: string;
+    name: string;
+    description: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
+  }>;
+};
+
+export type ServiceHandler = {
+  onConnect?: (ctx: ServiceContext) => Promise<void> | void;
+  onDisconnect?: (ctx: ServiceContext) => Promise<void> | void;
+  detect: (
+    actionId: string,
+    params: Record<string, unknown>,
+    ctx: ActionContext,
+  ) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+  execute: (
+    reactionId: string,
+    params: Record<string, unknown>,
+    ctx: ReactionContext,
+  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  onWebhook?: (
+    event: string,
+    payload: unknown,
+    ctx: WebhookContext,
+  ) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+};

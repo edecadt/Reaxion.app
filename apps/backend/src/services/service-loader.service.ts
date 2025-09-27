@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   LoadedService,
   ManifestValidationError,
+  ServiceManifest,
   validateManifest,
 } from './manifest.types';
 
@@ -56,6 +58,22 @@ export class ServiceLoader {
 
       const serviceId = entry.name;
       const servicePath = join(this.servicesRoot, serviceId);
+
+      try {
+        const sdkService = await this.discoverSDKService(
+          serviceId,
+          servicePath,
+        );
+        if (sdkService) {
+          services.push(sdkService);
+          continue;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to load SDK service ${serviceId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
       const manifestPath = join(servicePath, 'manifest.json');
 
       try {
@@ -63,7 +81,7 @@ export class ServiceLoader {
       } catch (error) {
         if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
           throw new ManifestValidationError(
-            `Missing manifest.json for service "${serviceId}"`,
+            `Missing manifest.json or SDK service for "${serviceId}"`,
           );
         }
 
@@ -75,7 +93,7 @@ export class ServiceLoader {
         rawManifest = await readFile(manifestPath, 'utf8');
       } catch (error) {
         throw new ManifestValidationError(
-          `Unable to read manifest for service "${serviceId}": ${error instanceof Error ? error.message : error}`,
+          `Unable to read manifest for service "${serviceId}": ${error instanceof Error ? error.message : String(error)}`,
         );
       }
 
@@ -84,7 +102,7 @@ export class ServiceLoader {
         parsed = JSON.parse(rawManifest);
       } catch (error) {
         throw new ManifestValidationError(
-          `Invalid JSON in manifest for service "${serviceId}": ${error instanceof Error ? error.message : error}`,
+          `Invalid JSON in manifest for service "${serviceId}": ${error instanceof Error ? error.message : String(error)}`,
         );
       }
 
@@ -99,5 +117,78 @@ export class ServiceLoader {
     }
 
     return services;
+  }
+
+  private async discoverSDKService(
+    serviceId: string,
+    servicePath: string,
+  ): Promise<LoadedService | null> {
+    const candidateFiles = ['index.ts', 'index.js', 'service.ts', 'service.js'];
+
+    type SDKService = {
+      __isSDKService: true;
+      getManifest(): ServiceManifest;
+    };
+
+    let serviceDef: SDKService | null = null;
+    let handlerPath: string | null = null;
+
+    for (const candidate of candidateFiles) {
+      const candidatePath = join(servicePath, candidate);
+
+      if (!existsSync(candidatePath)) {
+        continue;
+      }
+
+      try {
+        const moduleUrl = pathToFileURL(candidatePath);
+        moduleUrl.searchParams.set('t', Date.now().toString());
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const moduleExports = await import(moduleUrl.href);
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const candidate = moduleExports.default || moduleExports.service;
+
+        if (
+          candidate &&
+          typeof candidate === 'object' &&
+          '__isSDKService' in candidate
+        ) {
+          serviceDef = candidate as SDKService;
+          handlerPath = candidatePath;
+          break;
+        }
+      } catch (error) {
+        this.logger.debug(
+          `Failed to load ${candidatePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+    }
+
+    if (!serviceDef) {
+      return null;
+    }
+
+    try {
+      const manifest = serviceDef.getManifest();
+
+      if (manifest.id !== serviceId) {
+        throw new ManifestValidationError(
+          `SDK Service id (${manifest.id}) does not match directory name (${serviceId})`,
+        );
+      }
+
+      return {
+        ...manifest,
+        manifestPath: handlerPath!,
+        servicePath,
+        handlerPath,
+      };
+    } catch (error) {
+      throw new ManifestValidationError(
+        `Failed to generate manifest from SDK service ${serviceId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

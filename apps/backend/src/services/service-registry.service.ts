@@ -64,18 +64,16 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     await this.refresh();
   }
 
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     this.disposeWatchers();
   }
 
   getPublicServices(): ServiceManifest[] {
     return this.services.map((service) => {
-      const {
-        manifestPath: _manifestPath,
-        servicePath: _servicePath,
-        handlerPath: _handlerPath,
-        ...publicData
-      } = service;
+      const { manifestPath, servicePath, handlerPath, ...publicData } = service;
+      void manifestPath;
+      void servicePath;
+      void handlerPath;
       return publicData;
     });
   }
@@ -130,7 +128,9 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
         await this.materialize(services);
       })
       .catch((error) => {
-        this.logger.error(`Failed to refresh services: ${error.message}`);
+        this.logger.error(
+          `Failed to refresh services: ${error instanceof Error ? error.message : String(error)}`,
+        );
         throw error;
       })
       .finally(() => {
@@ -234,6 +234,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     try {
       const moduleUrl = pathToFileURL(service.handlerPath);
       moduleUrl.searchParams.set('t', Date.now().toString());
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const moduleExports = await import(moduleUrl.href);
       return this.resolveHandlerExport(
         service.id,
@@ -253,7 +254,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     handlerPath: string,
     moduleExports: unknown,
   ): PluginHandler {
-    let candidate = moduleExports as unknown;
+    let candidate: unknown = moduleExports;
 
     if (
       candidate &&
@@ -261,6 +262,15 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
       'default' in (candidate as Record<string, unknown>)
     ) {
       candidate = (candidate as Record<string, unknown>).default;
+    }
+
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      '__isSDKService' in (candidate as Record<string, unknown>)
+    ) {
+      const sdkService = candidate as { getHandler(): PluginHandler };
+      return sdkService.getHandler();
     }
 
     if (typeof candidate === 'function') {
@@ -335,7 +345,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
         this.watchers.push(watcher);
       } catch (error) {
         this.logger.warn(
-          `Unable to watch ${target}: ${error instanceof Error ? error.message : error}`,
+          `Unable to watch ${target}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     };
@@ -377,7 +387,9 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
 
     this.refreshTimer = setTimeout(() => {
       this.refresh().catch((error) => {
-        this.logger.error(`Failed to rescan services: ${error.message}`);
+        this.logger.error(
+          `Failed to rescan services: ${error instanceof Error ? error.message : String(error)}`,
+        );
       });
     }, 200);
   }

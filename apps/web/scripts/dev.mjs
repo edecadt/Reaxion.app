@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawn } from 'node:child_process';
 
 const LOGGER_PREFIX = '[web-dev]';
-const projectRoot = resolve(process.cwd());
+const projectRoot = resolve(globalThis.process.cwd());
 const monorepoRoot = resolve(projectRoot, '..', '..');
 
 const candidatePaths = [
@@ -17,7 +17,7 @@ const candidatePaths = [
   resolve(monorepoRoot, '.env'),
 ];
 
-const env = { ...process.env };
+const env = { ...globalThis.process.env };
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) {
@@ -52,10 +52,10 @@ env.PORT = desiredPort;
 
 console.log(`${LOGGER_PREFIX} starting Next.js on port ${env.PORT}`);
 
-const nextBin = resolve(projectRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'next.cmd' : 'next');
+const nextBin = resolve(projectRoot, 'node_modules', '.bin', globalThis.process.platform === 'win32' ? 'next.cmd' : 'next');
 if (!existsSync(nextBin)) {
   console.error(`${LOGGER_PREFIX} could not find Next.js binary at ${nextBin}. Did you run pnpm install?`);
-  process.exit(1);
+  globalThis.process.exit(1);
 }
 
 const child = spawn(nextBin, ['dev', '--turbopack'], {
@@ -65,8 +65,8 @@ const child = spawn(nextBin, ['dev', '--turbopack'], {
 
 child.on('exit', (code, signal) => {
   if (signal) {
-    process.kill(process.pid, signal);
+    globalThis.process.kill(globalThis.process.pid, signal);
     return;
   }
-  process.exit(code ?? 0);
+  globalThis.process.exit(code ?? 0);
 });
