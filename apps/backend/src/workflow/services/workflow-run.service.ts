@@ -7,6 +7,7 @@ import {
   Node,
   WorkflowContext,
   NodeExecution,
+  ParallelExecution,
 } from '../types/workflow.types';
 import { WorkflowRepository } from '../repositories/workflow.repository';
 import { ServiceRegistry } from '../../services/service-registry.service';
@@ -113,8 +114,22 @@ export class WorkflowRunService {
         { output },
       );
 
-      if (node.next && (output !== null || node.reactionId)) {
-        const nextNode = allNodes.find((n) => n.id === node.next);
+      const nextNodeIds = this.getNextNodeIds(node, output !== null, false);
+
+      if (nextNodeIds.length === 0) {
+        if (output === null && node.actionId) {
+          this.addLog(
+            context.runId,
+            'info',
+            `Action "${node.actionId}" didn't trigger, workflow paused`,
+          );
+        }
+        this.completeRun(context.runId);
+        return;
+      }
+
+      if (nextNodeIds.length === 1) {
+        const nextNode = allNodes.find((n) => n.id === nextNodeIds[0]);
         if (nextNode) {
           const nextContext: WorkflowContext = {
             ...context,
@@ -126,19 +141,12 @@ export class WorkflowRunService {
           this.addLog(
             context.runId,
             'warn',
-            `Next node "${node.next}" not found`,
+            `Next node "${nextNodeIds[0]}" not found`,
           );
           this.completeRun(context.runId);
         }
       } else {
-        if (output === null && node.actionId) {
-          this.addLog(
-            context.runId,
-            'info',
-            `Action "${node.actionId}" didn't trigger, workflow paused`,
-          );
-        }
-        this.completeRun(context.runId);
+        await this.executeParallelNodes(nextNodeIds, context, allNodes, output);
       }
     } catch (error) {
       const errorMessage =
@@ -149,7 +157,29 @@ export class WorkflowRunService {
         `Node "${node.id}" failed: ${errorMessage}`,
         { error: errorMessage },
       );
-      throw error;
+
+      const nextNodeIds = this.getNextNodeIds(node, false, true);
+      if (nextNodeIds.length > 0) {
+        if (nextNodeIds.length === 1) {
+          const nextNode = allNodes.find((n) => n.id === nextNodeIds[0]);
+          if (nextNode) {
+            const nextContext: WorkflowContext = {
+              ...context,
+              nodeId: nextNode.id,
+              previousOutput: { error: errorMessage },
+            };
+            await this.executeNode(nextNode, nextContext, allNodes);
+            return;
+          }
+        } else {
+          await this.executeParallelNodes(nextNodeIds, context, allNodes, {
+            error: errorMessage,
+          });
+          return;
+        }
+      }
+
+      this.failRun(context.runId, errorMessage);
     }
   }
 
@@ -199,8 +229,218 @@ export class WorkflowRunService {
   }
 
   private findFirstNode(nodes: Node[]): Node | undefined {
-    const referencedIds = new Set(nodes.map((n) => n.next).filter(Boolean));
+    const referencedIds = new Set<string>();
+
+    for (const node of nodes) {
+      if (typeof node.next === 'string') {
+        referencedIds.add(node.next);
+      } else if (Array.isArray(node.next)) {
+        node.next.forEach((id) => referencedIds.add(id));
+      }
+
+      if (node.connections) {
+        const connections = node.connections;
+        if (connections.success) {
+          connections.success.forEach((id) => referencedIds.add(id));
+        }
+        if (connections.error) {
+          connections.error.forEach((id) => referencedIds.add(id));
+        }
+        if (connections.always) {
+          connections.always.forEach((id) => referencedIds.add(id));
+        }
+      }
+    }
+
     return nodes.find((node) => !referencedIds.has(node.id));
+  }
+
+  private getNextNodeIds(
+    node: Node,
+    success: boolean,
+    hasError: boolean,
+  ): string[] {
+    const nextIds: string[] = [];
+
+    if (node.connections) {
+      const connections = node.connections;
+      if (hasError && connections.error) {
+        nextIds.push(...connections.error);
+      } else if (success && connections.success) {
+        nextIds.push(...connections.success);
+      }
+
+      if (connections.always) {
+        nextIds.push(...connections.always);
+      }
+
+      if (nextIds.length > 0) {
+        return nextIds;
+      }
+    }
+
+    if (success || !node.actionId) {
+      if (typeof node.next === 'string') {
+        nextIds.push(node.next);
+      } else if (Array.isArray(node.next)) {
+        nextIds.push(...node.next);
+      }
+    }
+
+    return nextIds;
+  }
+
+  private async executeParallelNodes(
+    nodeIds: string[],
+    context: WorkflowContext,
+    allNodes: Node[],
+    previousOutput?: Record<string, unknown> | null,
+  ): Promise<void> {
+    this.addLog(
+      context.runId,
+      'info',
+      `Executing ${nodeIds.length} nodes in parallel: ${nodeIds.join(', ')}`,
+    );
+
+    const parallelExecutions: ParallelExecution[] = nodeIds.map((nodeId) => {
+      const node = allNodes.find((n) => n.id === nodeId);
+      if (!node) {
+        throw new Error(`Node ${nodeId} not found`);
+      }
+
+      const nodeContext: WorkflowContext = {
+        ...context,
+        nodeId,
+        previousOutput: previousOutput || undefined,
+      };
+
+      return {
+        nodeId,
+        promise: this.executeSingleNode(node, nodeContext),
+        startedAt: new Date(),
+      };
+    });
+
+    const results = await Promise.allSettled(
+      parallelExecutions.map((exec) => exec.promise),
+    );
+
+    results.forEach((result, index) => {
+      const execution = parallelExecutions[index];
+      if (!execution) return;
+
+      const nodeId = execution.nodeId;
+      if (result.status === 'fulfilled') {
+        this.addLog(
+          context.runId,
+          'info',
+          `Parallel node "${nodeId}" completed successfully`,
+          { output: result.value },
+        );
+      } else {
+        const errorMessage =
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
+        this.addLog(
+          context.runId,
+          'error',
+          `Parallel node "${nodeId}" failed: ${errorMessage}`,
+        );
+      }
+    });
+
+    const commonNextNodes = this.findCommonNextNodes(nodeIds, allNodes);
+
+    if (commonNextNodes.length === 0) {
+      this.completeRun(context.runId);
+      return;
+    }
+
+    const mergedOutput: Record<string, unknown> = {};
+    results.forEach((result, index) => {
+      const execution = parallelExecutions[index];
+      if (!execution) return;
+
+      if (
+        result.status === 'fulfilled' &&
+        result.value &&
+        typeof result.value === 'object'
+      ) {
+        Object.assign(mergedOutput, result.value);
+      }
+    });
+
+    if (commonNextNodes.length === 1) {
+      const nextNode = allNodes.find((n) => n.id === commonNextNodes[0]);
+      if (nextNode) {
+        const nextContext: WorkflowContext = {
+          ...context,
+          nodeId: nextNode.id,
+          previousOutput: mergedOutput,
+        };
+        await this.executeNode(nextNode, nextContext, allNodes);
+      }
+    } else {
+      await this.executeParallelNodes(
+        commonNextNodes,
+        context,
+        allNodes,
+        mergedOutput,
+      );
+    }
+  }
+
+  private findCommonNextNodes(nodeIds: string[], allNodes: Node[]): string[] {
+    if (nodeIds.length === 0) return [];
+
+    const nextNodeSets = nodeIds.map((nodeId) => {
+      const node = allNodes.find((n) => n.id === nodeId);
+      if (!node) return new Set<string>();
+
+      const nextIds = this.getNextNodeIds(node, true, false);
+      return new Set(nextIds);
+    });
+
+    if (nextNodeSets.length === 0) return [];
+
+    let commonNodes = nextNodeSets[0];
+    if (!commonNodes) return [];
+
+    for (let i = 1; i < nextNodeSets.length; i++) {
+      const current = nextNodeSets[i];
+      if (!current) continue;
+
+      const intersection = new Set<string>();
+      for (const nodeId of commonNodes) {
+        if (current.has(nodeId)) {
+          intersection.add(nodeId);
+        }
+      }
+      commonNodes = intersection;
+    }
+
+    return Array.from(commonNodes);
+  }
+
+  private async executeSingleNode(
+    node: Node,
+    context: WorkflowContext,
+  ): Promise<Record<string, unknown> | null> {
+    this.addLog(
+      context.runId,
+      'info',
+      `Executing parallel node "${node.id}" (${node.serviceId})`,
+      { nodeId: node.id, serviceId: node.serviceId },
+    );
+
+    if (node.actionId) {
+      return await this.executeAction(node, context);
+    } else if (node.reactionId) {
+      return await this.executeReaction(node, context);
+    } else {
+      throw new Error(`Node ${node.id} has neither actionId nor reactionId`);
+    }
   }
 
   private completeRun(runId: string): void {
