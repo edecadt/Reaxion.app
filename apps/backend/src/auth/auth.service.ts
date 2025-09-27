@@ -52,8 +52,13 @@ export class AuthService {
 
     const passwordHash = await this.hashPassword(input.password);
 
-    const user = await (this.prisma.user as any).create({
+    const user = await this.prisma.user.create({
       data: { email, name, passwordHash },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
     });
 
     const token = this.signJwt({ sub: user.id, email: user.email });
@@ -66,9 +71,15 @@ export class AuthService {
 
   async login(input: LoginInput): Promise<AuthResult> {
     const email = input.email.trim().toLowerCase();
-    const user = (await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { email },
-    })) as any;
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        passwordHash: true,
+      },
+    });
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -95,7 +106,7 @@ export class AuthService {
     const derivedKey = await new Promise<Buffer>((resolve, reject) => {
       crypto.scrypt(password, salt, keylen, { N, r, p }, (err, dk) => {
         if (err) reject(err);
-        else resolve(dk as Buffer);
+        else resolve(dk);
       });
     });
     return `scrypt:${salt.toString('hex')}:${derivedKey.toString('hex')}`;
@@ -116,7 +127,7 @@ export class AuthService {
     const derivedKey = await new Promise<Buffer>((resolve, reject) => {
       crypto.scrypt(password, salt, keylen, { N, r, p }, (err, dk) => {
         if (err) reject(err);
-        else resolve(dk as Buffer);
+        else resolve(dk);
       });
     });
     return crypto.timingSafeEqual(derivedKey, expected);

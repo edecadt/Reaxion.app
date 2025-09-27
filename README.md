@@ -57,21 +57,25 @@ Le projet suit une architecture en monorepo avec trois composants principaux :
 ## 🚀 Stack technique
 
 ### Backend
+
 - **Framework** : NestJS (Node.js/TypeScript)
 - **Base de données** : PostgreSQL + Redis
 - **Authentication** : JWT + OAuth2 (Google, Facebook, etc.)
 - **API** : REST avec documentation automatique
 
 ### Frontend Web
+
 - **Framework** : Next.js (React/TypeScript)
 - **Styling** : Tailwind CSS
 - **State Management** : React Context/Hooks
 
 ### Mobile
+
 - **Framework** : React Native + Expo
 - **Platform** : Android (APK généré automatiquement)
 
 ### DevOps
+
 - **Containerisation** : Docker + Docker Compose
 - **Monorepo** : Turbo + pnpm
 - **CI/CD** : Configuration pour développement et production
@@ -187,6 +191,7 @@ Après avoir lancé `docker-compose up` :
 ### Exemple d'AREA
 
 **Gmail → OneDrive**
+
 - **Action** : "Réception d'un email avec pièce jointe"
 - **REAction** : "Sauvegarder la pièce jointe dans OneDrive"
 
@@ -195,6 +200,7 @@ Après avoir lancé `docker-compose up` :
 ### Endpoints principaux
 
 #### Authentification
+
 ```http
 POST /auth/register
 POST /auth/login
@@ -203,6 +209,7 @@ POST /auth/oauth/facebook
 ```
 
 #### Services
+
 ```http
 GET /services                    # Liste des services disponibles
 POST /services/{id}/subscribe    # S'abonner à un service
@@ -210,6 +217,7 @@ DELETE /services/{id}/unsubscribe # Se désabonner d'un service
 ```
 
 #### AREA
+
 ```http
 GET /areas          # Lister mes AREA
 POST /areas         # Créer une AREA
@@ -218,11 +226,13 @@ DELETE /areas/{id}  # Supprimer une AREA
 ```
 
 #### About (requis)
+
 ```http
 GET /about.json
 ```
 
 Response :
+
 ```json
 {
   "client": {
@@ -256,19 +266,23 @@ Response :
 ### Services d'exemple implémentés
 
 #### Social Media
+
 - **Facebook** : Messages, likes, nouveaux followers
 - **Twitter/X** : Tweets, mentions, hashtags
 - **Instagram** : Nouvelles photos, likes
 
 #### Cloud Storage
+
 - **OneDrive** : Nouveaux fichiers, partage
 - **Dropbox** : Synchronisation, collaboration
 
 #### Email
+
 - **Gmail** : Nouveaux emails, filtres
 - **Outlook 365** : Gestion des emails
 
 #### Utilitaires
+
 - **Timer** : Déclenchement temporel (date, heure)
 - **RSS** : Nouveaux articles
 

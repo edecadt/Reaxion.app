@@ -1,0 +1,9 @@
+{
+  "name": "timer-service",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@area/sdk": "workspace:*",
+    "cron-parser": "^5.4.0"
+  }
+}

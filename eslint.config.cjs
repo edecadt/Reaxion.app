@@ -4,14 +4,29 @@ const prettier = require("eslint-config-prettier");
 const pluginImport = require("eslint-plugin-import");
 
 module.exports = [
-  // Règles de base JS
   js.configs.recommended,
 
-  // Règles TypeScript
   ...tseslint.configs.recommended,
 
-  // Désactive les règles en conflit avec Prettier
   prettier,
+
+  {
+    files: ["*.config.cjs", "*.config.js"],
+    languageOptions: {
+      globals: {
+        require: "readonly",
+        module: "readonly",
+        exports: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        process: "readonly",
+      },
+      sourceType: "commonjs",
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 
   {
     files: ["**/*.{js,ts,jsx,tsx}"],
@@ -26,11 +41,9 @@ module.exports = [
       import: pluginImport,
     },
     rules: {
-      // Bonnes pratiques
       "no-unused-vars": "warn",
       "no-console": "off",
 
-      // Ordre des imports
       "import/order": [
         "warn",
         {
@@ -45,11 +58,9 @@ module.exports = [
         },
       ],
 
-      // TypeScript
       "@typescript-eslint/explicit-module-boundary-types": "off",
     },
     ignores: [
-      // Répertoires à ignorer
       "node_modules",
       "dist",
       "build",
@@ -58,7 +69,6 @@ module.exports = [
       ".next",
       "out",
 
-      // Fichiers de config à ignorer
       "*.config.js",
       "*.config.cjs",
       "commitlint.config.js",
