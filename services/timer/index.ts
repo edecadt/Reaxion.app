@@ -26,9 +26,6 @@ export default createService({
         const lastChecked = ctx.state?.lastChecked
           ? new Date(ctx.state.lastChecked as string)
           : new Date(0);
-        if (ctx.state) {
-          ctx.state.lastChecked = now.toISOString();
-        }
 
         try {
           const interval = CronExpressionParser.parse(expr, {
@@ -37,6 +34,9 @@ export default createService({
           const next = interval.next().toDate();
 
           if (next <= now) {
+            if (ctx.state) {
+              ctx.state.lastChecked = now.toISOString();
+            }
             ctx.logger?.log?.(`[timer] cron(${expr}) triggered`, "TimerPlugin");
             return { triggered_at: now.toISOString() };
           }
@@ -70,6 +70,34 @@ export default createService({
         return {
           completed: true,
           waited_seconds: seconds,
+        };
+      },
+    }),
+    createReaction({
+      id: "log",
+      name: "Log Message",
+      description: "Log a message to the console for testing",
+      input: { message: "string", level: "string" },
+      output: { logged: "boolean", message: "string" },
+      run: async (params, ctx) => {
+        const message = String(params.message) || "Test message";
+        const level = String(params.level) || "info";
+
+        switch (level) {
+          case "error":
+            ctx.logger?.error?.(message, "TimerPlugin");
+            break;
+          case "warn":
+            ctx.logger?.warn?.(message, "TimerPlugin");
+            break;
+          default:
+            ctx.logger?.log?.(message, "TimerPlugin");
+            break;
+        }
+
+        return {
+          logged: true,
+          message,
         };
       },
     }),

@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { ServiceLoader } from './services/service-loader.service';
-import { ServiceRegistry } from './services/service-registry.service';
+import { ServicesModule } from './services/services.module';
+import { WorkflowModule } from './workflow/workflow.module';
 
 @Module({
   imports: [
@@ -25,8 +25,10 @@ import { ServiceRegistry } from './services/service-registry.service';
       ],
     }),
     AuthModule,
+    ServicesModule,
+    WorkflowModule,
   ],
   controllers: [AppController],
-  providers: [AppService, ServiceLoader, ServiceRegistry],
+  providers: [AppService],
 })
 export class AppModule {}
