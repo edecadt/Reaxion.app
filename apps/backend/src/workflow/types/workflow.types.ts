@@ -4,7 +4,12 @@ export interface Node {
   actionId?: string;
   reactionId?: string;
   params: Record<string, unknown>;
-  next?: string;
+  next?: string | string[];
+  connections?: {
+    success?: string[];
+    error?: string[];
+    always?: string[];
+  };
 }
 
 export interface Workflow {
@@ -50,4 +55,10 @@ export interface WorkflowContext {
   nodeId: string;
   previousOutput?: Record<string, unknown>;
   state: Record<string, unknown>;
+}
+
+export interface ParallelExecution {
+  nodeId: string;
+  promise: Promise<Record<string, unknown> | null>;
+  startedAt: Date;
 }

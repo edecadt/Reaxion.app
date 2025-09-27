@@ -164,9 +164,9 @@ export class WorkflowEngineService implements OnModuleInit {
   }
 
   private createSampleWorkflow(): void {
-    const sampleWorkflow: Workflow = {
-      id: 'sample-timer-wait',
-      name: 'Sample Timer → Log Workflow',
+    const simpleWorkflow: Workflow = {
+      id: 'simple-timer-log',
+      name: 'Simple Timer → Log',
       active: true,
       nodes: [
         {
@@ -183,14 +183,69 @@ export class WorkflowEngineService implements OnModuleInit {
           serviceId: 'timer',
           reactionId: 'log',
           params: {
-            message: '🎯 Timer cron triggered successfully!',
+            message: '🎯 Simple workflow completed!',
             level: 'info',
           },
         },
       ],
     };
 
-    this.createWorkflow(sampleWorkflow);
-    this.logger.log('Created sample Timer → Log workflow');
+    const complexWorkflow: Workflow = {
+      id: 'complex-parallel-workflow',
+      name: 'Complex Parallel Workflow',
+      active: true,
+      nodes: [
+        {
+          id: 'timer-start',
+          serviceId: 'timer',
+          actionId: 'cron',
+          params: {
+            expression: '*/20 * * * * *',
+          },
+          next: ['log-branch-1', 'log-branch-2', 'wait-branch'],
+        },
+        {
+          id: 'log-branch-1',
+          serviceId: 'timer',
+          reactionId: 'log',
+          params: {
+            message: '🚀 Branch 1: Processing data...',
+            level: 'info',
+          },
+          next: 'final-log',
+        },
+        {
+          id: 'log-branch-2',
+          serviceId: 'timer',
+          reactionId: 'log',
+          params: {
+            message: '📊 Branch 2: Analyzing results...',
+            level: 'info',
+          },
+          next: 'final-log',
+        },
+        {
+          id: 'wait-branch',
+          serviceId: 'timer',
+          reactionId: 'wait',
+          params: {
+            seconds: 10,
+          },
+          next: 'final-log',
+        },
+        {
+          id: 'final-log',
+          serviceId: 'timer',
+          reactionId: 'log',
+          params: {
+            message: '✅ All parallel branches completed!',
+            level: 'info',
+          },
+        },
+      ],
+    };
+
+    this.createWorkflow(simpleWorkflow);
+    this.createWorkflow(complexWorkflow);
   }
 }
