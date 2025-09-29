@@ -41,11 +41,12 @@ describe('WorkflowController', () => {
   });
 
   describe('createWorkflow', () => {
-    it('crée un workflow quand l’ID est libre', () => {
+    it('creates a workflow when ID is available', async () => {
       service.getWorkflow.mockReturnValue(undefined);
+      service.createWorkflow.mockResolvedValue(undefined);
 
       const dto = { id: 'w1', name: 'New', active: true, nodes: [] };
-      const result = controller.createWorkflow(dto);
+      const result = await controller.createWorkflow(dto);
 
       expect(service.createWorkflow).toHaveBeenCalledWith(
         expect.objectContaining(dto),
@@ -53,29 +54,29 @@ describe('WorkflowController', () => {
       expect(result.id).toBe('w1');
     });
 
-    it('lève une BadRequest si l’ID existe déjà', () => {
+    it('throws BadRequest if ID already exists', async () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
 
-      expect(() =>
+      await expect(
         controller.createWorkflow({
           id: 'w1',
           name: 'New',
           active: true,
           nodes: [],
         }),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('getAllWorkflows', () => {
-    it('retourne tous les workflows', () => {
+    it('returns all workflows', () => {
       service.getAllWorkflows.mockReturnValue([mockWorkflow]);
 
       const res = controller.getAllWorkflows();
       expect(res).toEqual([mockWorkflow]);
     });
 
-    it('filtre par active=true', () => {
+    it('filters by active=true', () => {
       service.getAllWorkflows.mockReturnValue([
         { ...mockWorkflow, active: true },
         { ...mockWorkflow, id: 'w2', active: false },
@@ -88,13 +89,13 @@ describe('WorkflowController', () => {
   });
 
   describe('getWorkflowById', () => {
-    it('retourne le workflow si trouvé', () => {
+    it('returns workflow if found', () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
       const res = controller.getWorkflowById('w1');
       expect(res).toEqual(mockWorkflow);
     });
 
-    it('lève NotFound si inexistant', () => {
+    it('throws NotFound if non-existent', () => {
       service.getWorkflow.mockReturnValue(undefined);
       expect(() => controller.getWorkflowById('w404')).toThrow(
         NotFoundException,
@@ -103,11 +104,11 @@ describe('WorkflowController', () => {
   });
 
   describe('updateWorkflow', () => {
-    it('met à jour et renvoie le workflow', () => {
+    it('updates and returns workflow', async () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
-      service.updateWorkflow.mockReturnValue(true);
+      service.updateWorkflow.mockResolvedValue(true);
 
-      const res = controller.updateWorkflow('w1', { name: 'Updated' });
+      const res = await controller.updateWorkflow('w1', { name: 'Updated' });
       expect(service.updateWorkflow).toHaveBeenCalledWith(
         'w1',
         expect.objectContaining({ name: 'Updated' }),
@@ -115,59 +116,59 @@ describe('WorkflowController', () => {
       expect(res).toEqual(mockWorkflow);
     });
 
-    it('lève NotFound si inexistant', () => {
+    it('throws NotFound if non-existent', async () => {
       service.getWorkflow.mockReturnValue(undefined);
-      expect(() => controller.updateWorkflow('w404', { name: 'X' })).toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.updateWorkflow('w404', { name: 'X' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('deleteWorkflow', () => {
-    it('supprime le workflow', () => {
+    it('deletes workflow', async () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
-      service.deleteWorkflow.mockReturnValue(true);
+      service.deleteWorkflow.mockResolvedValue(true);
 
-      expect(() => controller.deleteWorkflow('w1')).not.toThrow();
+      await expect(controller.deleteWorkflow('w1')).resolves.not.toThrow();
       expect(service.deleteWorkflow).toHaveBeenCalledWith('w1');
     });
 
-    it('lève NotFound si inexistant', () => {
+    it('throws NotFound if non-existent', async () => {
       service.getWorkflow.mockReturnValue(undefined);
-      expect(() => controller.deleteWorkflow('w404')).toThrow(
+      await expect(controller.deleteWorkflow('w404')).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
   describe('activate/deactivate', () => {
-    it('active un workflow', () => {
+    it('activates workflow', async () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
-      service.activateWorkflow.mockReturnValue(true);
+      service.activateWorkflow.mockResolvedValue(true);
 
-      const res = controller.activateWorkflow('w1');
+      const res = await controller.activateWorkflow('w1');
       expect(service.activateWorkflow).toHaveBeenCalledWith('w1');
       expect(res).toEqual(mockWorkflow);
     });
 
-    it('désactive un workflow', () => {
+    it('deactivates workflow', async () => {
       service.getWorkflow.mockReturnValue(mockWorkflow);
-      service.deactivateWorkflow.mockReturnValue(true);
+      service.deactivateWorkflow.mockResolvedValue(true);
 
-      const res = controller.deactivateWorkflow('w1');
+      const res = await controller.deactivateWorkflow('w1');
       expect(service.deactivateWorkflow).toHaveBeenCalledWith('w1');
       expect(res).toEqual(mockWorkflow);
     });
   });
 
   describe('executeWorkflow', () => {
-    it('retourne un runId', () => {
+    it('returns runId', () => {
       service.executeWorkflow.mockReturnValue('run-123');
       const res = controller.executeWorkflow('w1');
       expect(res).toEqual({ runId: 'run-123' });
     });
 
-    it('lève NotFound si le service signale une erreur de type "not found"', () => {
+    it('throws NotFound if service throws not found error', () => {
       service.executeWorkflow.mockImplementation(() => {
         throw new Error('not found');
       });
@@ -178,7 +179,7 @@ describe('WorkflowController', () => {
   });
 
   describe('getWorkflowRuns', () => {
-    it('retourne la liste des runs', () => {
+    it('returns list of runs', () => {
       const mockRun = {
         id: 'r1',
         workflowId: 'w1',

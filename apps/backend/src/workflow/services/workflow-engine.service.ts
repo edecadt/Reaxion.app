@@ -14,9 +14,9 @@ export class WorkflowEngineService implements OnModuleInit {
     private readonly runService: WorkflowRunService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     this.logger.log('WorkflowEngine initialized');
-    this.createSampleWorkflow();
+    await this.createSampleWorkflow();
   }
 
   @Interval(5000)
@@ -84,8 +84,8 @@ export class WorkflowEngineService implements OnModuleInit {
     }
   }
 
-  createWorkflow(workflow: Workflow): void {
-    this.repository.createWorkflow(workflow);
+  async createWorkflow(workflow: Workflow): Promise<void> {
+    await this.repository.createWorkflow(workflow);
     this.logger.log(`Created workflow: ${workflow.name} (${workflow.id})`);
   }
 
@@ -97,28 +97,31 @@ export class WorkflowEngineService implements OnModuleInit {
     return this.repository.getAllWorkflows();
   }
 
-  updateWorkflow(id: string, updates: Partial<Workflow>): boolean {
-    const success = this.repository.updateWorkflow(id, updates);
+  async updateWorkflow(
+    id: string,
+    updates: Partial<Workflow>,
+  ): Promise<boolean> {
+    const success = await this.repository.updateWorkflow(id, updates);
     if (success) {
       this.logger.log(`Updated workflow: ${id}`);
     }
     return success;
   }
 
-  deleteWorkflow(id: string): boolean {
-    const success = this.repository.deleteWorkflow(id);
+  async deleteWorkflow(id: string): Promise<boolean> {
+    const success = await this.repository.deleteWorkflow(id);
     if (success) {
       this.logger.log(`Deleted workflow: ${id}`);
     }
     return success;
   }
 
-  activateWorkflow(id: string): boolean {
-    return this.updateWorkflow(id, { active: true });
+  async activateWorkflow(id: string): Promise<boolean> {
+    return await this.updateWorkflow(id, { active: true });
   }
 
-  deactivateWorkflow(id: string): boolean {
-    return this.updateWorkflow(id, { active: false });
+  async deactivateWorkflow(id: string): Promise<boolean> {
+    return await this.updateWorkflow(id, { active: false });
   }
 
   pauseScheduler(): void {
@@ -163,7 +166,7 @@ export class WorkflowEngineService implements OnModuleInit {
     return this.runService.getRunLogs(runId);
   }
 
-  private createSampleWorkflow(): void {
+  private async createSampleWorkflow(): Promise<void> {
     const simpleWorkflow: Workflow = {
       id: 'simple-timer-log',
       name: 'Simple Timer → Log',
@@ -245,7 +248,7 @@ export class WorkflowEngineService implements OnModuleInit {
       ],
     };
 
-    this.createWorkflow(simpleWorkflow);
-    this.createWorkflow(complexWorkflow);
+    await this.createWorkflow(simpleWorkflow);
+    await this.createWorkflow(complexWorkflow);
   }
 }

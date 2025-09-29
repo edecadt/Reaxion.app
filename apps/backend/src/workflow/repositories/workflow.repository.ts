@@ -1,14 +1,106 @@
-import { Injectable } from '@nestjs/common';
-import { Workflow, WorkflowRun, WorkflowLog } from '../types/workflow.types';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaService } from '../../prisma.service';
+import {
+  Workflow,
+  WorkflowRun,
+  WorkflowLog,
+  Node,
+} from '../types/workflow.types';
 
 @Injectable()
-export class WorkflowRepository {
+export class WorkflowRepository implements OnModuleInit {
+  private readonly logger = new Logger(WorkflowRepository.name);
   private workflows: Map<string, Workflow> = new Map();
   private runs: Map<string, WorkflowRun> = new Map();
   private logs: Map<string, WorkflowLog[]> = new Map();
 
-  createWorkflow(workflow: Workflow): void {
-    this.workflows.set(workflow.id, workflow);
+  constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    this.logger.log('Initializing WorkflowRepository with cache warming...');
+    await this.warmCache();
+    this.logger.log(`Cache warmed with ${this.workflows.size} workflows`);
+  }
+
+  private async warmCache(): Promise<void> {
+    try {
+      const dbWorkflows = await this.prisma.workflow.findMany({
+        include: {
+          nodes: {
+            orderBy: { position: 'asc' },
+          },
+        },
+      });
+
+      for (const dbWorkflow of dbWorkflows) {
+        const workflow = this.mapDbWorkflowToWorkflow(dbWorkflow);
+        this.workflows.set(workflow.id, workflow);
+      }
+
+      this.logger.debug(
+        `Loaded ${dbWorkflows.length} workflows from database into cache`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to warm cache from database:', error);
+      throw error;
+    }
+  }
+
+  private mapDbWorkflowToWorkflow(dbWorkflow: any): Workflow {
+    return {
+      id: dbWorkflow.id,
+      name: dbWorkflow.name,
+      active: dbWorkflow.active,
+      nodes: dbWorkflow.nodes.map((node: any) => this.mapDbNodeToNode(node)),
+    };
+  }
+
+  private mapDbNodeToNode(dbNode: any): Node {
+    return {
+      id: dbNode.id,
+      serviceId: dbNode.serviceId,
+      actionId: dbNode.actionId,
+      reactionId: dbNode.reactionId,
+      params: dbNode.params as Record<string, unknown>,
+      next: dbNode.next as string | string[] | undefined,
+      connections: undefined, // Not stored in DB yet
+    };
+  }
+
+  async createWorkflow(workflow: Workflow): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workflow.create({
+          data: {
+            id: workflow.id,
+            name: workflow.name,
+            active: workflow.active,
+            userId: 1,
+          },
+        });
+
+        if (workflow.nodes.length > 0) {
+          await tx.workflowNode.createMany({
+            data: workflow.nodes.map((node, index) => ({
+              id: node.id,
+              workflowId: workflow.id,
+              serviceId: node.serviceId,
+              actionId: node.actionId,
+              reactionId: node.reactionId,
+              params: node.params as any,
+              next: node.next as any,
+              position: index,
+            })),
+          });
+        }
+      });
+
+      this.workflows.set(workflow.id, workflow);
+      this.logger.debug(`Created workflow ${workflow.id} in DB and cache`);
+    } catch (error) {
+      this.logger.error(`Failed to create workflow ${workflow.id}:`, error);
+      throw error;
+    }
   }
 
   getWorkflow(id: string): Workflow | undefined {
@@ -23,16 +115,91 @@ export class WorkflowRepository {
     return Array.from(this.workflows.values()).filter((w) => w.active);
   }
 
-  updateWorkflow(id: string, updates: Partial<Workflow>): boolean {
-    const workflow = this.workflows.get(id);
-    if (!workflow) return false;
+  async updateWorkflow(
+    id: string,
+    updates: Partial<Workflow>,
+  ): Promise<boolean> {
+    const existingWorkflow = this.workflows.get(id);
+    if (!existingWorkflow) {
+      this.logger.warn(`Cannot update workflow ${id}: not found in cache`);
+      return false;
+    }
 
-    this.workflows.set(id, { ...workflow, ...updates });
-    return true;
+    const previousState = { ...existingWorkflow };
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (updates.name !== undefined || updates.active !== undefined) {
+          await tx.workflow.update({
+            where: { id },
+            data: {
+              ...(updates.name !== undefined && { name: updates.name }),
+              ...(updates.active !== undefined && { active: updates.active }),
+            },
+          });
+        }
+
+        if (updates.nodes !== undefined) {
+          await tx.workflowNode.deleteMany({
+            where: { workflowId: id },
+          });
+
+          if (updates.nodes.length > 0) {
+            await tx.workflowNode.createMany({
+              data: updates.nodes.map((node, index) => ({
+                id: node.id,
+                workflowId: id,
+                serviceId: node.serviceId,
+                actionId: node.actionId,
+                reactionId: node.reactionId,
+                params: node.params as any,
+                next: node.next as any,
+                position: index,
+              })),
+            });
+          }
+        }
+      });
+
+      const updatedWorkflow = { ...existingWorkflow, ...updates };
+      this.workflows.set(id, updatedWorkflow);
+      this.logger.debug(`Updated workflow ${id} in DB and cache`);
+      return true;
+    } catch (error) {
+      this.workflows.set(id, previousState);
+      this.logger.error(
+        `Failed to update workflow ${id}, cache rolled back:`,
+        error,
+      );
+      throw error;
+    }
   }
 
-  deleteWorkflow(id: string): boolean {
-    return this.workflows.delete(id);
+  async deleteWorkflow(id: string): Promise<boolean> {
+    const existingWorkflow = this.workflows.get(id);
+    if (!existingWorkflow) {
+      this.logger.warn(`Cannot delete workflow ${id}: not found in cache`);
+      return false;
+    }
+
+    const backupWorkflow = { ...existingWorkflow };
+
+    try {
+      await this.prisma.workflow.delete({
+        where: { id },
+      });
+
+      this.workflows.delete(id);
+      this.logger.debug(`Deleted workflow ${id} from DB and cache`);
+      return true;
+    } catch (error) {
+      this.workflows.set(id, backupWorkflow);
+      this.logger.error(
+        `Failed to delete workflow ${id}, cache rolled back:`,
+        error,
+      );
+      throw error;
+    }
   }
 
   createRun(run: WorkflowRun): void {
