@@ -220,7 +220,10 @@ export default function CreateWorkflowScreen() {
                         <Text style={styles.label}>Triggers</Text>
                         <View style={styles.chipRow}>
                           {actionsList.map((a) => {
-                            const aid = toId(a.name);
+                            const aid = knownActionIdFor(
+                              n.serviceId || "",
+                              a.name,
+                            );
                             const active = n.actionId === aid;
                             return (
                               <Pressable
@@ -255,7 +258,10 @@ export default function CreateWorkflowScreen() {
                         <Text style={styles.label}>Réactions</Text>
                         <View style={styles.chipRow}>
                           {reactionsList.map((r) => {
-                            const rid = toId(r.name);
+                            const rid = knownReactionIdFor(
+                              n.serviceId || "",
+                              r.name,
+                            );
                             const active = n.reactionId === rid;
                             return (
                               <Pressable
@@ -284,6 +290,159 @@ export default function CreateWorkflowScreen() {
                             );
                           })}
                         </View>
+                      </View>
+                      <View style={{ gap: 6 }}>
+                        <Text style={styles.label}>Paramètres</Text>
+                        {n.serviceId === "timer" && n.actionId === "cron" && (
+                          <View style={{ gap: 4 }}>
+                            <TextInput
+                              value={String(
+                                (n.params?.expression as string) ?? "",
+                              )}
+                              onChangeText={(t) =>
+                                actions.setNodeParams(n.id, {
+                                  ...n.params,
+                                  expression: t,
+                                })
+                              }
+                              placeholder="*/20 * * * * *"
+                              style={styles.input}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                            />
+                            <Text style={styles.cardText}>
+                              Format: ss mm HH DD MM JJ
+                            </Text>
+                            {(() => {
+                              const expr = String(
+                                (n.params?.expression as string) ?? "",
+                              ).trim();
+                              const valid =
+                                expr.length > 0 &&
+                                expr.split(/\s+/).length === 6;
+                              return !valid ? (
+                                <Text style={styles.errorText}>
+                                  Expression cron à 6 champs requise
+                                </Text>
+                              ) : null;
+                            })()}
+                          </View>
+                        )}
+                        {n.serviceId === "timer" && n.reactionId === "log" && (
+                          <View style={{ gap: 8 }}>
+                            <View style={{ gap: 4 }}>
+                              <Text style={styles.label}>Message</Text>
+                              <TextInput
+                                value={String(
+                                  (n.params?.message as string) ?? "",
+                                )}
+                                onChangeText={(t) =>
+                                  actions.setNodeParams(n.id, {
+                                    ...n.params,
+                                    message: t,
+                                  })
+                                }
+                                placeholder="Votre message"
+                                style={styles.input}
+                              />
+                              {(() => {
+                                const msg = String(
+                                  (n.params?.message as string) ?? "",
+                                ).trim();
+                                return msg.length === 0 ? (
+                                  <Text style={styles.errorText}>
+                                    Message requis
+                                  </Text>
+                                ) : null;
+                              })()}
+                            </View>
+                            <View style={{ gap: 4 }}>
+                              <Text style={styles.label}>Niveau</Text>
+                              <View style={styles.chipRow}>
+                                {["info", "warn", "error"].map((lvl) => {
+                                  const active =
+                                    (n.params?.level as string) === lvl;
+                                  return (
+                                    <Pressable
+                                      key={lvl}
+                                      style={[
+                                        styles.chip,
+                                        active && styles.chipActive,
+                                      ]}
+                                      onPress={() =>
+                                        actions.setNodeParams(n.id, {
+                                          ...n.params,
+                                          level: lvl,
+                                        })
+                                      }
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.chipText,
+                                          active && styles.chipTextActive,
+                                        ]}
+                                      >
+                                        {lvl}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                              {(() => {
+                                const lvl = String(
+                                  (n.params?.level as string) ?? "",
+                                );
+                                const ok = ["info", "warn", "error"].includes(
+                                  lvl,
+                                );
+                                return !ok ? (
+                                  <Text style={styles.errorText}>
+                                    Niveau invalide (info, warn, error)
+                                  </Text>
+                                ) : null;
+                              })()}
+                            </View>
+                          </View>
+                        )}
+                        {n.serviceId === "timer" && n.reactionId === "wait" && (
+                          <View style={{ gap: 4 }}>
+                            <Text style={styles.label}>Secondes</Text>
+                            <TextInput
+                              value={String(
+                                (n.params?.seconds as
+                                  | number
+                                  | string
+                                  | undefined) ?? "0",
+                              )}
+                              onChangeText={(t) =>
+                                actions.setNodeParams(n.id, {
+                                  ...n.params,
+                                  seconds: t.replace(/[^0-9]/g, ""),
+                                })
+                              }
+                              keyboardType="numeric"
+                              style={styles.input}
+                            />
+                            {(() => {
+                              const raw = String(
+                                (n.params?.seconds as any) ?? "0",
+                              );
+                              const num = Number(raw);
+                              const ok = Number.isFinite(num) && num >= 0;
+                              return !ok ? (
+                                <Text style={styles.errorText}>
+                                  Entrez un nombre ≥ 0
+                                </Text>
+                              ) : null;
+                            })()}
+                          </View>
+                        )}
+                        {n.serviceId === "test-webhook" &&
+                          n.actionId === "on-test-webhook" && (
+                            <Text style={styles.cardText}>
+                              Aucun paramètre requis
+                            </Text>
+                          )}
                       </View>
                     </View>
                   )}
@@ -501,4 +660,24 @@ function toId(name: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
+}
+
+function knownActionIdFor(serviceId: string, displayName: string): string {
+  const name = displayName.toLowerCase();
+  if (serviceId === "timer") {
+    if (name.includes("cron")) return "cron";
+  }
+  if (serviceId === "test-webhook") {
+    if (name.includes("webhook")) return "on-test-webhook";
+  }
+  return toId(displayName);
+}
+
+function knownReactionIdFor(serviceId: string, displayName: string): string {
+  const name = displayName.toLowerCase();
+  if (serviceId === "timer") {
+    if (name.includes("log")) return "log";
+    if (name.includes("wait")) return "wait";
+  }
+  return toId(displayName);
 }
