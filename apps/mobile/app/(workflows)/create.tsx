@@ -10,7 +10,15 @@ import {
   Alert,
 } from "react-native";
 import { useWorkflowBuilder } from "./builder/use-workflow-builder";
-import { getAbout, type AboutService, createWorkflow } from "../lib/api";
+import {
+  getAbout,
+  type AboutService,
+  createWorkflow,
+  activateWorkflow,
+  deactivateWorkflow,
+  executeWorkflow,
+} from "../lib/api";
+import { tryGetApiUrl } from "../lib/api-config";
 import type { CreateWorkflowDto, Workflow } from "@reaxion/common";
 
 export default function CreateWorkflowScreen() {
@@ -37,6 +45,8 @@ export default function CreateWorkflowScreen() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [created, setCreated] = useState<Workflow | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
 
   const loadServices = useCallback(async () => {
     setLoadingServices(true);
@@ -224,6 +234,35 @@ export default function CreateWorkflowScreen() {
     }
   }, [isFormValid, serialize, actions]);
 
+  const handleToggleActive = useCallback(async () => {
+    if (!created) return;
+    setActionLoading(true);
+    try {
+      const updated = created.active
+        ? await deactivateWorkflow(created.id)
+        : await activateWorkflow(created.id);
+      setCreated(updated);
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setActionLoading(false);
+    }
+  }, [created]);
+
+  const handleExecute = useCallback(async () => {
+    if (!created) return;
+    setActionLoading(true);
+    try {
+      const { runId } = await executeWorkflow(created.id);
+      setLastRunId(runId);
+      Alert.alert("Exécution démarrée", `runId: ${runId}`);
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setActionLoading(false);
+    }
+  }, [created]);
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Créer un workflow</Text>
@@ -308,10 +347,60 @@ export default function CreateWorkflowScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Workflow créé</Text>
           <Text style={styles.cardText}>ID: {created.id}</Text>
+          <Text style={styles.cardText}>Nom: {created.name}</Text>
+          <Text style={styles.cardText}>
+            Actif: {created.active ? "Oui" : "Non"}
+          </Text>
+          {(() => {
+            const entry = computeEntryNode(created);
+            return (
+              <Text style={styles.cardText}>
+                Nœud d'entrée: {entry ?? "(introuvable)"}
+              </Text>
+            );
+          })()}
           {created.webhookToken && (
-            <Text style={styles.cardText}>
-              Token webhook: {created.webhookToken}
-            </Text>
+            <View style={{ gap: 4 }}>
+              <Text style={styles.cardTitle}>Webhook</Text>
+              <Text style={styles.cardText} selectable>
+                {`${tryGetApiUrl() ?? ""}/webhooks/test-webhook/test/${created.webhookToken}`}
+              </Text>
+            </View>
+          )}
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <Pressable
+              onPress={handleToggleActive}
+              disabled={actionLoading}
+              style={[
+                styles.secondaryButton,
+                actionLoading && styles.buttonDisabled,
+              ]}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {created.active ? "Désactiver" : "Activer"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleExecute}
+              disabled={actionLoading}
+              style={[
+                styles.secondaryButton,
+                actionLoading && styles.buttonDisabled,
+              ]}
+            >
+              <Text style={styles.secondaryButtonText}>
+                Exécuter maintenant
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled
+              style={[styles.secondaryButton, styles.buttonDisabled]}
+            >
+              <Text style={styles.secondaryButtonText}>Voir logs</Text>
+            </Pressable>
+          </View>
+          {lastRunId && (
+            <Text style={styles.cardText}>Dernier run: {lastRunId}</Text>
           )}
         </View>
       )}
@@ -956,4 +1045,16 @@ function knownReactionIdFor(serviceId: string, displayName: string): string {
     if (name.includes("wait")) return "wait";
   }
   return toId(displayName);
+}
+
+function computeEntryNode(w: Workflow): string | null {
+  if (!w.nodes || w.nodes.length === 0) return null;
+  const referenced = new Set<string>();
+  for (const n of w.nodes) {
+    const next = (n as any).next as undefined | string | string[];
+    if (typeof next === "string") referenced.add(next);
+    else if (Array.isArray(next)) next.forEach((id) => referenced.add(id));
+  }
+  const entry = w.nodes.find((n) => !referenced.has(n.id));
+  return entry ? entry.id : null;
 }
