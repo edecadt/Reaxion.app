@@ -94,6 +94,68 @@ export default function CreateWorkflowScreen() {
     return set;
   }, [state.nodes]);
 
+  const validationErrors = useMemo(() => {
+    const errs: string[] = [];
+    if (!state.id.trim()) errs.push("Identifiant manquant");
+    if (!isNameValid) errs.push("Le nom est obligatoire");
+    if (state.nodes.length === 0) errs.push("Ajoutez au moins un nœud");
+
+    const ids = state.nodes.map((n) => n.id);
+    const dupIds = ids.filter((id, idx) => ids.indexOf(id) !== idx);
+    if (dupIds.length > 0)
+      errs.push(
+        `Identifiants de nœuds en double: ${Array.from(new Set(dupIds)).join(", ")}`,
+      );
+
+    for (const n of state.nodes) {
+      if (!n.serviceId) errs.push(`Nœud ${n.id}: service requis`);
+      const hasAction = !!n.actionId;
+      const hasReaction = !!n.reactionId;
+      if (hasAction === hasReaction)
+        errs.push(`Nœud ${n.id}: choisissez action OU réaction`);
+      if (n.params === null || typeof n.params !== "object")
+        errs.push(`Nœud ${n.id}: params doit être un objet`);
+
+      if (n.serviceId === "timer" && n.actionId === "cron") {
+        const expr = String((n.params as any)?.expression ?? "").trim();
+        if (!(expr.length > 0 && expr.split(/\s+/).length === 6)) {
+          errs.push(`Nœud ${n.id}: expression cron (6 champs) requise`);
+        }
+      }
+      if (n.serviceId === "timer" && n.reactionId === "log") {
+        const msg = String((n.params as any)?.message ?? "").trim();
+        const lvl = String((n.params as any)?.level ?? "");
+        if (msg.length === 0) errs.push(`Nœud ${n.id}: message requis`);
+        if (!["info", "warn", "error"].includes(lvl))
+          errs.push(`Nœud ${n.id}: niveau invalide (info|warn|error)`);
+      }
+      if (n.serviceId === "timer" && n.reactionId === "wait") {
+        const raw = String((n.params as any)?.seconds ?? "0");
+        const num = Number(raw);
+        if (!Number.isFinite(num) || num < 0)
+          errs.push(`Nœud ${n.id}: seconds doit être ≥ 0`);
+      }
+    }
+
+    if (selfLoopIds.size > 0)
+      errs.push(`Boucles vers soi-même: ${Array.from(selfLoopIds).join(", ")}`);
+    if (invalidNextByNode.size > 0) {
+      const parts: string[] = [];
+      invalidNextByNode.forEach((vals, key) =>
+        parts.push(`${key}→[${vals.join(", ")}]`),
+      );
+      errs.push(`Références next invalides: ${parts.join("; ")}`);
+    }
+    if (state.nodes.length > 0) {
+      if (entryIds.length !== 1)
+        errs.push("Le graphe doit avoir exactement un nœud d'entrée");
+    }
+
+    return errs;
+  }, [state, isNameValid, selfLoopIds, invalidNextByNode, entryIds]);
+
+  const isFormValid = validationErrors.length === 0;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Créer un workflow</Text>
@@ -130,11 +192,11 @@ export default function CreateWorkflowScreen() {
       </View>
 
       <Pressable
-        disabled={!isNameValid}
-        style={[styles.primaryButton, !isNameValid && styles.buttonDisabled]}
+        disabled={!isFormValid}
+        style={[styles.primaryButton, !isFormValid && styles.buttonDisabled]}
         onPress={() => {}}
       >
-        <Text style={styles.primaryButtonText}>Suivant</Text>
+        <Text style={styles.primaryButtonText}>Créer</Text>
       </Pressable>
 
       <View style={styles.card}>
@@ -159,6 +221,21 @@ export default function CreateWorkflowScreen() {
                   {s.actions.length} actions • {s.reactions.length} réactions
                 </Text>
               </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Validation</Text>
+        {validationErrors.length === 0 ? (
+          <Text style={styles.cardText}>Tout est valide</Text>
+        ) : (
+          <View style={{ gap: 4 }}>
+            {validationErrors.map((e, i) => (
+              <Text key={i} style={styles.errorText}>
+                • {e}
+              </Text>
             ))}
           </View>
         )}
