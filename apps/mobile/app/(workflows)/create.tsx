@@ -119,6 +119,54 @@ export default function CreateWorkflowScreen() {
           </View>
         )}
       </View>
+
+      <View style={styles.card}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Text style={styles.cardTitle}>Nœuds</Text>
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() => actions.addNode()}
+          >
+            <Text style={styles.secondaryButtonText}>Ajouter un nœud</Text>
+          </Pressable>
+        </View>
+        <View style={styles.nodesList}>
+          {state.nodes.length === 0 ? (
+            <Text style={styles.cardText}>Aucun nœud</Text>
+          ) : (
+            state.nodes.map((n) => {
+              const type = n.actionId
+                ? `action:${n.actionId}`
+                : n.reactionId
+                  ? `reaction:${n.reactionId}`
+                  : "—";
+              const service = n.serviceId || "(service non défini)";
+              return (
+                <View key={n.id} style={styles.nodeItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.nodeTitle}>{n.id}</Text>
+                    <Text style={styles.nodeMeta}>
+                      {service} • {type}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.dangerButton}
+                    onPress={() => actions.removeNode(n.id)}
+                  >
+                    <Text style={styles.dangerButtonText}>Supprimer</Text>
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -236,6 +284,37 @@ const styles = StyleSheet.create({
   serviceMeta: {
     fontSize: 12,
     color: "#6b7280",
+  },
+  nodesList: {
+    gap: 8,
+  },
+  nodeItem: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  nodeTitle: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  nodeMeta: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  dangerButton: {
+    backgroundColor: "#fee2e2",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  dangerButtonText: {
+    color: "#991b1b",
+    fontSize: 14,
+    fontWeight: "600",
   },
   secondaryButton: {
     backgroundColor: "#e5e7eb",
