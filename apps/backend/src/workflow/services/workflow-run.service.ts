@@ -275,7 +275,7 @@ export class WorkflowRunService {
       reactionId: node.reactionId!,
       params: node.params,
       previousOutput: context.previousOutput,
-      userId: 'test-user', // TODO: Get from actual context
+      userId: 'test-user',
       state: context.state,
       logger: this.logger,
     };
@@ -523,17 +523,64 @@ export class WorkflowRunService {
     runId: string,
     updates: Partial<WorkflowRun>,
   ): Promise<void> {
-    try {
+    const buildUpdateData = () => {
       const updateData: any = {};
       if (updates.status !== undefined) updateData.status = updates.status;
       if (updates.completedAt !== undefined)
         updateData.completedAt = updates.completedAt;
       if (updates.error !== undefined) updateData.error = updates.error;
+      return updateData;
+    };
 
-      await this.prisma.workflowRun.update({
-        where: { id: runId },
-        data: updateData,
-      });
+    try {
+      const maxAttempts = 5;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await this.prisma.workflowRun.update({
+            where: { id: runId },
+            data: buildUpdateData(),
+          });
+          this.repository.updateRun(runId, updates);
+          return;
+        } catch (err: any) {
+          const message: string = err?.message || String(err);
+          const code: string | undefined = err?.code;
+
+          if (
+            (code === 'P2025' || message.includes('No record was found')) &&
+            attempt < maxAttempts
+          ) {
+            const exists = await this.prisma.workflowRun.findUnique({
+              where: { id: runId },
+              select: { id: true },
+            });
+            if (!exists) {
+              const cached = this.repository.getRun(runId);
+              if (cached) {
+                try {
+                  await this.prisma.workflowRun.create({
+                    data: {
+                      id: cached.id,
+                      workflowId: cached.workflowId,
+                      status: cached.status,
+                      startedAt: cached.startedAt,
+                      completedAt: cached.completedAt ?? null,
+                      error: cached.error ?? null,
+                    },
+                  });
+                } catch {
+                  // ignore create races
+                }
+              }
+            }
+            await this.delay(50 * attempt);
+            continue;
+          }
+
+          throw err;
+        }
+      }
+
       this.repository.updateRun(runId, updates);
     } catch (error) {
       this.logger.error(`Failed to update workflow run ${runId}:`, error);
@@ -589,21 +636,48 @@ export class WorkflowRunService {
 
   private async createLog(log: WorkflowLog): Promise<void> {
     try {
-      await this.prisma.workflowRunLog.create({
-        data: {
-          id: log.id,
-          runId: log.runId,
-          nodeId: log.nodeId || null,
-          message: log.message,
-          level: log.level,
-          timestamp: log.timestamp,
-        },
-      });
+      const maxAttempts = 5;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const exists = await this.prisma.workflowRun.findUnique({
+            where: { id: log.runId },
+            select: { id: true },
+          });
+          if (!exists) {
+            await this.delay(50 * attempt);
+            continue;
+          }
+
+          await this.prisma.workflowRunLog.create({
+            data: {
+              id: log.id,
+              runId: log.runId,
+              nodeId: log.nodeId || null,
+              message: log.message,
+              level: log.level,
+              timestamp: log.timestamp,
+            },
+          });
+          this.repository.addLog(log.runId, log);
+          return;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes('P2003') && attempt < maxAttempts) {
+            await this.delay(50 * attempt);
+            continue;
+          }
+          throw err;
+        }
+      }
       this.repository.addLog(log.runId, log);
     } catch (error) {
       this.logger.error(`Failed to create workflow log ${log.id}:`, error);
       this.repository.addLog(log.runId, log);
     }
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async getRunStatus(runId: string): Promise<WorkflowRun | null> {

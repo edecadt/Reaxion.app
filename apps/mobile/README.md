@@ -56,3 +56,36 @@ This app expects a backend API base URL.
 - Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (example: `http://localhost:8080`).
 - The value is embedded into the app via `app.config.ts` as `extra.apiUrl` and read at runtime.
 - If it is not set, the home screen will show a warning and API calls should be considered disabled.
+
+## Guide d’usage — Création de workflow (mobile)
+
+Pré‑requis backend
+
+- Backend en dev sur `http://localhost:8080` (ou configurez `EXPO_PUBLIC_API_URL`).
+- CORS: le backend autorise `http://localhost:8082` par défaut.
+
+Scénarios rapides
+
+- Timer → Log
+  1. Nom + Actif (optionnel), un id est généré.
+  2. Ajoutez un nœud, choisissez `timer` puis Trigger `cron` et renseignez une expression à 6 champs (ex: `*/20 * * * * *`).
+  3. Ajoutez un second nœud, choisissez `timer` puis Réaction `log` et entrez un message + niveau.
+  4. Chaînez le premier nœud vers le second via `next`.
+  5. Corrigez les validations si besoin, puis “Créer”.
+  6. Dans le récap, vous pouvez “Activer” et “Exécuter maintenant”.
+- Webhook → Log
+  1. Créez un nœud `test-webhook` → Trigger `on-test-webhook` (pas de paramètres).
+  2. Ajoutez un nœud `timer` → Réaction `log` et renseignez le message.
+  3. Chaînez le premier vers le second, “Créer”.
+  4. Copiez l’URL webhook affichée et envoyez un POST JSON vers `/webhooks/test-webhook/test/:token` avec `{ "type": "test", "message": "..." }`.
+  5. Le scheduler déclenchera le workflow (latence ~5s).
+
+Étapes pour tester
+
+- Créer un workflow, l’activer, l’exécuter, vérifier le runId.
+- Tester le webhook avec un POST, puis observer le déclenchement.
+
+Notes UI
+
+- États loading/empty/error intégrés avec spinners et toasts.
+- Les erreurs techniques sont simplifiées en messages lisibles.
