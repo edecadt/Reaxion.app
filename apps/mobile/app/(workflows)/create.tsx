@@ -50,6 +50,50 @@ export default function CreateWorkflowScreen() {
     void loadServices();
   }, [loadServices]);
 
+  const existingIds = useMemo(
+    () => new Set(state.nodes.map((n) => n.id)),
+    [state.nodes],
+  );
+
+  const referencedIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of state.nodes) {
+      const next = n.next;
+      if (typeof next === "string") set.add(next);
+      else if (Array.isArray(next)) next.forEach((id) => set.add(id));
+    }
+    return set;
+  }, [state.nodes]);
+
+  const entryIds = useMemo(
+    () => state.nodes.map((n) => n.id).filter((id) => !referencedIds.has(id)),
+    [state.nodes, referencedIds],
+  );
+
+  const invalidNextByNode = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const n of state.nodes) {
+      const next = n.next;
+      const arr = Array.isArray(next) ? next : next ? [next] : [];
+      const invalid = arr.filter((id) => !existingIds.has(id));
+      if (invalid.length > 0) map.set(n.id, invalid);
+    }
+    return map;
+  }, [state.nodes, existingIds]);
+
+  const selfLoopIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of state.nodes) {
+      const next = n.next;
+      if (typeof next === "string") {
+        if (next === n.id) set.add(n.id);
+      } else if (Array.isArray(next)) {
+        if (next.includes(n.id)) set.add(n.id);
+      }
+    }
+    return set;
+  }, [state.nodes]);
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Créer un workflow</Text>
