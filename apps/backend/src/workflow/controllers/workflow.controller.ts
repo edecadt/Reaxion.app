@@ -22,7 +22,9 @@ export class WorkflowController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  createWorkflow(@Body() createWorkflowDto: CreateWorkflowDto): Workflow {
+  async createWorkflow(
+    @Body() createWorkflowDto: CreateWorkflowDto,
+  ): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(
       createWorkflowDto.id,
     );
@@ -48,7 +50,7 @@ export class WorkflowController {
       userId: createWorkflowDto.userId,
     };
 
-    this.workflowEngineService.createWorkflow(workflow);
+    await this.workflowEngineService.createWorkflow(workflow);
     return workflow;
   }
 
@@ -81,10 +83,10 @@ export class WorkflowController {
   }
 
   @Patch(':id')
-  updateWorkflow(
+  async updateWorkflow(
     @Param('id') id: string,
     @Body() updateWorkflowDto: UpdateWorkflowDto,
-  ): Workflow {
+  ): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
       throw new NotFoundException(`Workflow with id '${id}' not found`);
@@ -104,7 +106,10 @@ export class WorkflowController {
       }));
     }
 
-    const success = this.workflowEngineService.updateWorkflow(id, updateData);
+    const success = await this.workflowEngineService.updateWorkflow(
+      id,
+      updateData,
+    );
     if (!success) {
       throw new BadRequestException(
         `Failed to update workflow with id '${id}'`,
@@ -116,13 +121,13 @@ export class WorkflowController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  deleteWorkflow(@Param('id') id: string): void {
+  async deleteWorkflow(@Param('id') id: string): Promise<void> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
       throw new NotFoundException(`Workflow with id '${id}' not found`);
     }
 
-    const success = this.workflowEngineService.deleteWorkflow(id);
+    const success = await this.workflowEngineService.deleteWorkflow(id);
     if (!success) {
       throw new BadRequestException(
         `Failed to delete workflow with id '${id}'`,
@@ -132,13 +137,13 @@ export class WorkflowController {
 
   @Post(':id/activate')
   @HttpCode(HttpStatus.OK)
-  activateWorkflow(@Param('id') id: string): Workflow {
+  async activateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
       throw new NotFoundException(`Workflow with id '${id}' not found`);
     }
 
-    const success = this.workflowEngineService.activateWorkflow(id);
+    const success = await this.workflowEngineService.activateWorkflow(id);
     if (!success) {
       throw new BadRequestException(
         `Failed to activate workflow with id '${id}'`,
@@ -150,13 +155,13 @@ export class WorkflowController {
 
   @Post(':id/deactivate')
   @HttpCode(HttpStatus.OK)
-  deactivateWorkflow(@Param('id') id: string): Workflow {
+  async deactivateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
       throw new NotFoundException(`Workflow with id '${id}' not found`);
     }
 
-    const success = this.workflowEngineService.deactivateWorkflow(id);
+    const success = await this.workflowEngineService.deactivateWorkflow(id);
     if (!success) {
       throw new BadRequestException(
         `Failed to deactivate workflow with id '${id}'`,
