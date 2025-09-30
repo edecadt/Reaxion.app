@@ -141,26 +141,152 @@ export default function CreateWorkflowScreen() {
             <Text style={styles.cardText}>Aucun nœud</Text>
           ) : (
             state.nodes.map((n) => {
-              const type = n.actionId
-                ? `action:${n.actionId}`
+              const selectedService = services.find(
+                (s) => toId(s.name) === (n.serviceId || ""),
+              );
+              const actionsList = selectedService?.actions ?? [];
+              const reactionsList = selectedService?.reactions ?? [];
+              const typeBadge = n.actionId
+                ? "Trigger"
                 : n.reactionId
-                  ? `reaction:${n.reactionId}`
-                  : "—";
-              const service = n.serviceId || "(service non défini)";
+                  ? "Réaction"
+                  : null;
+
               return (
-                <View key={n.id} style={styles.nodeItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.nodeTitle}>{n.id}</Text>
-                    <Text style={styles.nodeMeta}>
-                      {service} • {type}
-                    </Text>
+                <View key={n.id} style={{ gap: 8 }}>
+                  <View style={styles.nodeItem}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.badgeRow}>
+                        <Text style={styles.nodeTitle}>{n.id}</Text>
+                        {typeBadge && (
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{typeBadge}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.nodeMeta}>
+                        {n.serviceId || "(service non défini)"}
+                        {n.actionId
+                          ? ` • action:${n.actionId}`
+                          : n.reactionId
+                            ? ` • reaction:${n.reactionId}`
+                            : ""}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.dangerButton}
+                      onPress={() => actions.removeNode(n.id)}
+                    >
+                      <Text style={styles.dangerButtonText}>Supprimer</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    style={styles.dangerButton}
-                    onPress={() => actions.removeNode(n.id)}
-                  >
-                    <Text style={styles.dangerButtonText}>Supprimer</Text>
-                  </Pressable>
+
+                  <View>
+                    <Text style={styles.label}>Service</Text>
+                    <View style={styles.chipRow}>
+                      {services.map((s) => {
+                        const id = toId(s.name);
+                        const active = id === n.serviceId;
+                        return (
+                          <Pressable
+                            key={s.name}
+                            style={[styles.chip, active && styles.chipActive]}
+                            onPress={() =>
+                              actions.updateNode(n.id, {
+                                serviceId: id,
+                                actionId: undefined,
+                                reactionId: undefined,
+                                params: {},
+                              })
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.chipText,
+                                active && styles.chipTextActive,
+                              ]}
+                            >
+                              {s.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {selectedService && (
+                    <View style={{ gap: 8 }}>
+                      <View>
+                        <Text style={styles.label}>Triggers</Text>
+                        <View style={styles.chipRow}>
+                          {actionsList.map((a) => {
+                            const aid = toId(a.name);
+                            const active = n.actionId === aid;
+                            return (
+                              <Pressable
+                                key={a.name}
+                                style={[
+                                  styles.chip,
+                                  active && styles.chipActive,
+                                ]}
+                                onPress={() =>
+                                  actions.updateNode(n.id, {
+                                    actionId: aid,
+                                    reactionId: undefined,
+                                    params: {},
+                                  })
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    active && styles.chipTextActive,
+                                  ]}
+                                >
+                                  {a.name}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      <View>
+                        <Text style={styles.label}>Réactions</Text>
+                        <View style={styles.chipRow}>
+                          {reactionsList.map((r) => {
+                            const rid = toId(r.name);
+                            const active = n.reactionId === rid;
+                            return (
+                              <Pressable
+                                key={r.name}
+                                style={[
+                                  styles.chip,
+                                  active && styles.chipActive,
+                                ]}
+                                onPress={() =>
+                                  actions.updateNode(n.id, {
+                                    reactionId: rid,
+                                    actionId: undefined,
+                                    params: {},
+                                  })
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    active && styles.chipTextActive,
+                                  ]}
+                                >
+                                  {r.name}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
+                  )}
                 </View>
               );
             })
@@ -316,6 +442,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#e5e7eb",
+  },
+  chipActive: {
+    backgroundColor: "#111827",
+  },
+  chipText: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  chipTextActive: {
+    color: "#fff",
+  },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#eef2ff",
+  },
+  badgeText: { color: "#3730a3", fontSize: 11, fontWeight: "700" },
   secondaryButton: {
     backgroundColor: "#e5e7eb",
     paddingVertical: 10,
@@ -336,4 +493,12 @@ function uuidv4(): string {
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+function toId(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
 }
