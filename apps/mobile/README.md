@@ -48,3 +48,11 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## API configuration
+
+This app expects a backend API base URL.
+
+- Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (example: `http://localhost:8080`).
+- The value is embedded into the app via `app.config.ts` as `extra.apiUrl` and read at runtime.
+- If it is not set, the home screen will show a warning and API calls should be considered disabled.
