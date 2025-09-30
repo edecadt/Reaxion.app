@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { useWorkflowBuilder } from "./builder/use-workflow-builder";
+import { getAbout, type AboutService } from "../lib/api";
 
 export default function CreateWorkflowScreen() {
   const { state, actions } = useWorkflowBuilder();
@@ -27,6 +28,27 @@ export default function CreateWorkflowScreen() {
   }, [state.id, actions]);
 
   const isNameValid = useMemo(() => state.name.trim().length > 0, [state.name]);
+
+  const [services, setServices] = useState<AboutService[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+
+  const loadServices = useCallback(async () => {
+    setLoadingServices(true);
+    setServicesError(null);
+    try {
+      const about = await getAbout();
+      setServices(about.server.services);
+    } catch (e) {
+      setServicesError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setLoadingServices(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadServices();
+  }, [loadServices]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -70,6 +92,33 @@ export default function CreateWorkflowScreen() {
       >
         <Text style={styles.primaryButtonText}>Suivant</Text>
       </Pressable>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Services</Text>
+        {loadingServices ? (
+          <Text style={styles.cardText}>Chargement…</Text>
+        ) : servicesError ? (
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.cardText, { color: "#b91c1c" }]}>
+              {servicesError}
+            </Text>
+            <Pressable style={styles.secondaryButton} onPress={loadServices}>
+              <Text style={styles.secondaryButtonText}>Réessayer</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.servicesList}>
+            {services.map((s) => (
+              <View key={s.name} style={styles.serviceItem}>
+                <Text style={styles.serviceName}>{s.name}</Text>
+                <Text style={styles.serviceMeta}>
+                  {s.actions.length} actions • {s.reactions.length} réactions
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -149,6 +198,55 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  card: {
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e5e7eb",
+    padding: 16,
+    backgroundColor: "#fafafa",
+    marginTop: 8,
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  cardText: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  servicesList: {
+    gap: 8,
+  },
+  serviceItem: {
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e7eb",
+  },
+  serviceName: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  serviceMeta: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  secondaryButton: {
+    backgroundColor: "#e5e7eb",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#111827",
+    fontSize: 14,
     fontWeight: "600",
   },
 });
