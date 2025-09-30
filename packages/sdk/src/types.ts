@@ -6,6 +6,7 @@ export type ParameterSchema = Record<
 export type ServiceContext = {
   serviceId: string;
   userId?: string;
+  workflowToken?: string;
   logger?: {
     log?: (message: string, context?: string) => void;
     error?: (message: string, context?: string) => void;
@@ -19,6 +20,51 @@ export type ServiceContext = {
     metadata?: Record<string, unknown>;
   };
   state?: Record<string, unknown>;
+  webhookEvents?: {
+    storeEvent: (
+      serviceId: string,
+      webhookId: string,
+      payload: unknown,
+      userId?: string,
+      workflowToken?: string,
+    ) => void;
+    getUnprocessedEvents: (
+      serviceId: string,
+      webhookId: string,
+      userId?: string,
+      workflowToken?: string,
+    ) => Array<{
+      serviceId: string;
+      webhookId: string;
+      payload: unknown;
+      headers?: Record<string, string | string[]>;
+      timestamp: Date;
+      processed: boolean;
+      userId?: string;
+      workflowToken?: string;
+    }>;
+    getLastUnprocessedEvent: (
+      serviceId: string,
+      webhookId: string,
+      userId?: string,
+      workflowToken?: string,
+    ) => {
+      serviceId: string;
+      webhookId: string;
+      payload: unknown;
+      headers?: Record<string, string | string[]>;
+      timestamp: Date;
+      processed: boolean;
+      userId?: string;
+      workflowToken?: string;
+    } | null;
+    markAsProcessed: (
+      serviceId: string,
+      webhookId: string,
+      timestamp: Date,
+    ) => void;
+    cleanupOldEvents: () => void;
+  };
 };
 
 export type ActionContext = ServiceContext & {

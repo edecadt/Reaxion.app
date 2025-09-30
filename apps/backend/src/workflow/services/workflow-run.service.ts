@@ -11,6 +11,7 @@ import {
 } from '../types/workflow.types';
 import { WorkflowRepository } from '../repositories/workflow.repository';
 import { ServiceRegistry } from '../../services/service-registry.service';
+import { WebhookEventsService } from '../../services/webhook-events.service';
 import type {
   PluginActionContext,
   PluginReactionContext,
@@ -23,9 +24,14 @@ export class WorkflowRunService {
   constructor(
     private readonly repository: WorkflowRepository,
     private readonly serviceRegistry: ServiceRegistry,
+    private readonly webhookEvents: WebhookEventsService,
   ) {}
 
-  startWorkflowRun(workflow: Workflow): string {
+  startWorkflowRun(
+    workflow: Workflow,
+    triggerNode?: Node,
+    triggerData?: Record<string, unknown>,
+  ): string {
     const runId = uuidv4();
     const run: WorkflowRun = {
       id: runId,
@@ -38,12 +44,14 @@ export class WorkflowRunService {
     this.repository.createRun(run);
     this.addLog(runId, 'info', `Started workflow run for "${workflow.name}"`);
 
-    void this.executeWorkflow(workflow, runId).catch((error) => {
-      this.logger.error(`Workflow run ${runId} failed:`, error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.failRun(runId, errorMessage);
-    });
+    void this.executeWorkflow(workflow, runId, triggerNode, triggerData).catch(
+      (error) => {
+        this.logger.error(`Workflow run ${runId} failed:`, error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.failRun(runId, errorMessage);
+      },
+    );
 
     return runId;
   }
@@ -51,6 +59,8 @@ export class WorkflowRunService {
   private async executeWorkflow(
     workflow: Workflow,
     runId: string,
+    triggerNode?: Node,
+    triggerData?: Record<string, unknown>,
   ): Promise<void> {
     if (workflow.nodes.length === 0) {
       this.completeRun(runId);
@@ -62,14 +72,56 @@ export class WorkflowRunService {
       throw new Error('No starting node found in workflow');
     }
 
-    const context: WorkflowContext = {
-      runId,
-      workflowId: workflow.id,
-      nodeId: firstNode.id,
-      state: {},
-    };
+    if (triggerNode && triggerData && firstNode.id === triggerNode.id) {
+      this.addLog(
+        runId,
+        'info',
+        `Skipping trigger node "${firstNode.id}", starting from next node`,
+        { triggerData },
+      );
 
-    await this.executeNode(firstNode, context, workflow.nodes);
+      const nextNodeIds = this.getNextNodeIds(firstNode, true, false);
+      if (nextNodeIds.length === 0) {
+        this.completeRun(runId);
+        return;
+      }
+
+      if (nextNodeIds.length === 1) {
+        const nextNode = workflow.nodes.find((n) => n.id === nextNodeIds[0]);
+        if (nextNode) {
+          const context: WorkflowContext = {
+            runId,
+            workflowId: workflow.id,
+            nodeId: nextNode.id,
+            state: {},
+            previousOutput: triggerData,
+          };
+          await this.executeNode(nextNode, context, workflow.nodes);
+        }
+      } else {
+        const context: WorkflowContext = {
+          runId,
+          workflowId: workflow.id,
+          nodeId: firstNode.id,
+          state: {},
+        };
+        await this.executeParallelNodes(
+          nextNodeIds,
+          context,
+          workflow.nodes,
+          triggerData,
+        );
+      }
+    } else {
+      const context: WorkflowContext = {
+        runId,
+        workflowId: workflow.id,
+        nodeId: firstNode.id,
+        state: {},
+      };
+
+      await this.executeNode(firstNode, context, workflow.nodes);
+    }
   }
 
   private async executeNode(
@@ -191,13 +243,18 @@ export class WorkflowRunService {
     if (!handler) {
       throw new Error(`Service "${node.serviceId}" not found`);
     }
+
+    const workflow = this.repository.getWorkflow(context.workflowId);
+
     const actionContext: PluginActionContext = {
       serviceId: node.serviceId,
       actionId: node.actionId!,
       params: node.params,
-      userId: 'test-user', // TODO: Get from actual context
+      userId: workflow?.userId || 'test-user',
       state: context.state,
       logger: this.logger,
+      webhookEvents: this.webhookEvents,
+      workflowToken: workflow?.webhookToken,
     };
 
     return await handler.detect(node.actionId!, node.params, actionContext);
@@ -501,11 +558,14 @@ export class WorkflowRunService {
     return this.repository.getAllRuns();
   }
 
-  async checkTrigger(workflow: Workflow, triggerNode: Node): Promise<boolean> {
+  async checkTrigger(
+    workflow: Workflow,
+    triggerNode: Node,
+  ): Promise<Record<string, unknown> | null> {
     try {
       const handler = this.serviceRegistry.getHandler(triggerNode.serviceId);
       if (!handler) {
-        return false;
+        return null;
       }
 
       const stateKey = `${workflow.id}_${triggerNode.id}`;
@@ -515,9 +575,11 @@ export class WorkflowRunService {
         serviceId: triggerNode.serviceId,
         actionId: triggerNode.actionId!,
         params: triggerNode.params,
-        userId: 'test-user',
+        userId: workflow.userId || 'test-user',
         state: globalState[stateKey] || {},
         logger: this.logger,
+        webhookEvents: this.webhookEvents,
+        workflowToken: workflow.webhookToken,
       };
 
       const result = await handler.detect(
@@ -528,13 +590,13 @@ export class WorkflowRunService {
 
       globalState[stateKey] = actionContext.state || {};
 
-      return result !== null;
+      return result;
     } catch (error) {
       this.logger.error(
         `Error checking trigger for node ${triggerNode.id}:`,
         error,
       );
-      return false;
+      return null;
     }
   }
 

@@ -381,6 +381,12 @@ importers:
 
   packages/typescript-config: {}
 
+  services/test-webhook:
+    dependencies:
+      "@area/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   services/timer:
     dependencies:
       "@area/sdk":
