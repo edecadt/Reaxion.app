@@ -17,6 +17,8 @@ export interface Workflow {
   name: string;
   active: boolean;
   nodes: Node[];
+  webhookToken?: string;
+  userId?: string;
 }
 
 export interface WorkflowRun {

@@ -34,6 +34,10 @@ export class WorkflowController {
       );
     }
 
+    const hasWebhookTrigger = createWorkflowDto.nodes.some(
+      (node) => node.actionId && node.serviceId,
+    );
+
     const workflow: Workflow = {
       id: createWorkflowDto.id,
       name: createWorkflowDto.name,
@@ -42,10 +46,19 @@ export class WorkflowController {
         ...node,
         params: node.params || {},
       })),
+      webhookToken: hasWebhookTrigger ? this.generateWebhookToken() : undefined,
+      userId: createWorkflowDto.userId,
     };
 
     await this.workflowEngineService.createWorkflow(workflow);
     return workflow;
+  }
+
+  private generateWebhookToken(): string {
+    return (
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   }
 
   @Get()

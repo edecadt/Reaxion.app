@@ -51,4 +51,8 @@ export class CreateWorkflowDto {
   @ValidateNested({ each: true })
   @Type(() => CreateNodeDto)
   nodes!: CreateNodeDto[];
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
