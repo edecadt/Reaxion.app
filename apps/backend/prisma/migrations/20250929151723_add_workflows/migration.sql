@@ -1,6 +1,7 @@
 ALTER TABLE "public"."User" ALTER COLUMN "passwordHash" DROP DEFAULT,
 ALTER COLUMN "updatedAt" DROP DEFAULT;
 
+
 CREATE TABLE "public"."Workflow" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -11,6 +12,7 @@ CREATE TABLE "public"."Workflow" (
 
     CONSTRAINT "Workflow_pkey" PRIMARY KEY ("id")
 );
+
 
 CREATE TABLE "public"."WorkflowNode" (
     "id" TEXT NOT NULL,
