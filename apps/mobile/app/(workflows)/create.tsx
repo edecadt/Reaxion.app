@@ -136,6 +136,19 @@ export default function CreateWorkflowScreen() {
             <Text style={styles.secondaryButtonText}>Ajouter un nœud</Text>
           </Pressable>
         </View>
+        {state.nodes.length > 0 && (
+          <View>
+            {entryIds.length === 1 ? (
+              <Text style={styles.cardText}>Nœud d'entrée: {entryIds[0]}</Text>
+            ) : entryIds.length === 0 ? (
+              <Text style={styles.errorText}>Aucun nœud d'entrée détecté</Text>
+            ) : (
+              <Text style={styles.errorText}>
+                Plusieurs nœuds d'entrée: {entryIds.join(", ")}
+              </Text>
+            )}
+          </View>
+        )}
         <View style={styles.nodesList}>
           {state.nodes.length === 0 ? (
             <Text style={styles.cardText}>Aucun nœud</Text>
@@ -446,6 +459,58 @@ export default function CreateWorkflowScreen() {
                       </View>
                     </View>
                   )}
+                  <View style={{ gap: 6 }}>
+                    <Text style={styles.label}>Chaînage (nœuds suivants)</Text>
+                    <View style={styles.chipRow}>
+                      {state.nodes
+                        .filter((m) => m.id !== n.id)
+                        .map((m) => {
+                          const current = n.next;
+                          const arr = Array.isArray(current)
+                            ? current
+                            : current
+                              ? [current]
+                              : [];
+                          const active = arr.includes(m.id);
+                          return (
+                            <Pressable
+                              key={m.id}
+                              style={[styles.chip, active && styles.chipActive]}
+                              onPress={() => {
+                                const nextArr = new Set(arr);
+                                if (active) nextArr.delete(m.id);
+                                else nextArr.add(m.id);
+                                const result = Array.from(nextArr);
+                                actions.setNodeNext(
+                                  n.id,
+                                  result.length === 0 ? undefined : result,
+                                );
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.chipText,
+                                  active && styles.chipTextActive,
+                                ]}
+                              >
+                                {m.id}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                    </View>
+                    {selfLoopIds.has(n.id) && (
+                      <Text style={styles.errorText}>
+                        Boucle vers soi-même interdite
+                      </Text>
+                    )}
+                    {invalidNextByNode.get(n.id) && (
+                      <Text style={styles.errorText}>
+                        Références invalides:{" "}
+                        {invalidNextByNode.get(n.id)!.join(", ")}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               );
             })
