@@ -63,7 +63,7 @@ export class WorkflowRepository implements OnModuleInit {
       reactionId: dbNode.reactionId,
       params: dbNode.params as Record<string, unknown>,
       next: dbNode.next as string | string[] | undefined,
-      connections: undefined, // Not stored in DB yet
+      connections: undefined,
     };
   }
 
