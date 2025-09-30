@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { existsSync, FSWatcher, watch } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { createJiti } from 'jiti';
 
 import {
   LoadedService,
@@ -232,9 +233,19 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const moduleUrl = pathToFileURL(service.handlerPath);
-      moduleUrl.searchParams.set('t', Date.now().toString());
-      const moduleExports = await import(moduleUrl.href);
+      let moduleExports: any;
+
+      if (service.handlerPath.endsWith('.ts')) {
+        const jiti = createJiti(service.handlerPath, {
+          interopDefault: true,
+        });
+        moduleExports = await jiti.import(service.handlerPath);
+      } else {
+        const moduleUrl = pathToFileURL(service.handlerPath);
+        moduleUrl.searchParams.set('t', Date.now().toString());
+        moduleExports = await import(moduleUrl.href);
+      }
+
       return this.resolveHandlerExport(
         service.id,
         service.handlerPath,

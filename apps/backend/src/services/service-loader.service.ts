@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createJiti } from 'jiti';
 
 import {
   LoadedService,
@@ -141,17 +142,28 @@ export class ServiceLoader {
       }
 
       try {
-        const moduleUrl = pathToFileURL(candidatePath);
-        moduleUrl.searchParams.set('t', Date.now().toString());
-        const moduleExports = await import(moduleUrl.href);
-        const candidate = moduleExports.default || moduleExports.service;
+        let moduleExports: any;
+
+        if (candidate.endsWith('.ts')) {
+          const jiti = createJiti(candidatePath, {
+            interopDefault: true,
+          });
+          moduleExports = await jiti.import(candidatePath);
+        } else {
+          const moduleUrl = pathToFileURL(candidatePath);
+          moduleUrl.searchParams.set('t', Date.now().toString());
+          moduleExports = await import(moduleUrl.href);
+        }
+
+        const candidateModule =
+          moduleExports.default || moduleExports.service || moduleExports;
 
         if (
-          candidate &&
-          typeof candidate === 'object' &&
-          '__isSDKService' in candidate
+          candidateModule &&
+          typeof candidateModule === 'object' &&
+          '__isSDKService' in candidateModule
         ) {
-          serviceDef = candidate as SDKService;
+          serviceDef = candidateModule as SDKService;
           handlerPath = candidatePath;
           break;
         }
