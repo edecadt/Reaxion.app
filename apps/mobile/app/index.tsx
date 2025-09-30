@@ -1,4 +1,12 @@
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Link } from "expo-router";
 import { isApiConfigured, tryGetApiUrl } from "./lib/api-config";
 
 export default function Home() {
@@ -23,6 +31,11 @@ export default function Home() {
           <Text style={styles.cardText}>Base URL: {apiUrl}</Text>
         </View>
       )}
+      <Link href="/(workflows)/create" asChild>
+        <Pressable style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Créer un workflow</Text>
+        </Pressable>
+      </Link>
     </ScrollView>
   );
 }
@@ -76,5 +89,18 @@ const styles = StyleSheet.create({
   },
   code: {
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+  },
+  primaryButton: {
+    marginTop: 8,
+    backgroundColor: "#111827",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });
