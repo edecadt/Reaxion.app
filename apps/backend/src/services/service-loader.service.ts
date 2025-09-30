@@ -143,10 +143,7 @@ export class ServiceLoader {
       try {
         const moduleUrl = pathToFileURL(candidatePath);
         moduleUrl.searchParams.set('t', Date.now().toString());
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const moduleExports = await import(moduleUrl.href);
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         const candidate = moduleExports.default || moduleExports.service;
 
         if (

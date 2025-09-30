@@ -16,7 +16,6 @@ export class WorkflowEngineService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('WorkflowEngine initialized');
-    await this.createSampleWorkflow();
   }
 
   @Interval(5000)
@@ -155,19 +154,19 @@ export class WorkflowEngineService implements OnModuleInit {
     return runId;
   }
 
-  getWorkflowRuns(workflowId?: string) {
+  async getWorkflowRuns(workflowId?: string) {
     if (workflowId) {
-      return this.repository.getRunsByWorkflow(workflowId);
+      return await this.runService.getWorkflowRuns(workflowId);
     }
-    return this.repository.getAllRuns();
+    return await this.runService.getAllRuns();
   }
 
-  getRunStatus(runId: string) {
-    return this.runService.getRunStatus(runId);
+  async getRunStatus(runId: string) {
+    return await this.runService.getRunStatus(runId);
   }
 
-  getRunLogs(runId: string) {
-    return this.runService.getRunLogs(runId);
+  async getRunLogs(runId: string) {
+    return await this.runService.getRunLogs(runId);
   }
 
   private async createSampleWorkflow(): Promise<void> {

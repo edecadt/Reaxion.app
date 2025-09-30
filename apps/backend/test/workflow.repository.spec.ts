@@ -93,7 +93,7 @@ describe('WorkflowRepository', () => {
             },
             $transaction: jest.fn(),
           },
-        },
+        } as any,
       ],
     }).compile();
 
@@ -107,7 +107,9 @@ describe('WorkflowRepository', () => {
 
   describe('onModuleInit', () => {
     it('should warm cache with workflows from database', async () => {
-      prisma.workflow.findMany.mockResolvedValue([mockDbWorkflow]);
+      (prisma.workflow.findMany as jest.Mock).mockResolvedValue([
+        mockDbWorkflow,
+      ]);
 
       await repository.onModuleInit();
 
@@ -126,7 +128,7 @@ describe('WorkflowRepository', () => {
     });
 
     it('should handle empty database on startup', async () => {
-      prisma.workflow.findMany.mockResolvedValue([]);
+      (prisma.workflow.findMany as jest.Mock).mockResolvedValue([]);
 
       await repository.onModuleInit();
 
@@ -136,7 +138,7 @@ describe('WorkflowRepository', () => {
 
     it('should throw error if database fails during warmup', async () => {
       const error = new Error('Database connection failed');
-      prisma.workflow.findMany.mockRejectedValue(error);
+      (prisma.workflow.findMany as jest.Mock).mockRejectedValue(error);
 
       await expect(repository.onModuleInit()).rejects.toThrow(
         'Database connection failed',
@@ -152,8 +154,10 @@ describe('WorkflowRepository', () => {
     });
 
     it('should create workflow in database and cache', async () => {
-      prisma.workflow.create.mockResolvedValue(mockDbWorkflow);
-      prisma.workflowNode.createMany.mockResolvedValue({ count: 2 });
+      (prisma.workflow.create as jest.Mock).mockResolvedValue(mockDbWorkflow);
+      (prisma.workflowNode.createMany as jest.Mock).mockResolvedValue({
+        count: 2,
+      });
 
       await repository.createWorkflow(mockWorkflow);
 
@@ -191,7 +195,7 @@ describe('WorkflowRepository', () => {
 
     it('should create workflow without nodes', async () => {
       const workflowWithoutNodes = { ...mockWorkflow, nodes: [] };
-      prisma.workflow.create.mockResolvedValue(mockDbWorkflow);
+      (prisma.workflow.create as jest.Mock).mockResolvedValue(mockDbWorkflow);
 
       await repository.createWorkflow(workflowWithoutNodes);
 
@@ -264,7 +268,7 @@ describe('WorkflowRepository', () => {
 
     it('should update workflow in database and cache', async () => {
       const updates = { name: 'Updated Workflow', active: true };
-      prisma.workflow.update.mockResolvedValue({
+      (prisma.workflow.update as jest.Mock).mockResolvedValue({
         ...mockDbWorkflow,
         ...updates,
       });
@@ -293,8 +297,12 @@ describe('WorkflowRepository', () => {
       ];
       const updates = { nodes: newNodes };
 
-      prisma.workflowNode.deleteMany.mockResolvedValue({ count: 2 });
-      prisma.workflowNode.createMany.mockResolvedValue({ count: 1 });
+      (prisma.workflowNode.deleteMany as jest.Mock).mockResolvedValue({
+        count: 2,
+      });
+      (prisma.workflowNode.createMany as jest.Mock).mockResolvedValue({
+        count: 1,
+      });
 
       const success = await repository.updateWorkflow('w1', updates);
 
@@ -335,7 +343,7 @@ describe('WorkflowRepository', () => {
     });
 
     it('should delete workflow from database and cache', async () => {
-      prisma.workflow.delete.mockResolvedValue(mockDbWorkflow);
+      (prisma.workflow.delete as jest.Mock).mockResolvedValue(mockDbWorkflow);
 
       const success = await repository.deleteWorkflow('w1');
 
@@ -353,7 +361,7 @@ describe('WorkflowRepository', () => {
 
     it('should rollback cache on database error', async () => {
       const error = new Error('Database error');
-      prisma.workflow.delete.mockRejectedValue(error);
+      (prisma.workflow.delete as jest.Mock).mockRejectedValue(error);
 
       await expect(repository.deleteWorkflow('w1')).rejects.toThrow(
         'Database error',
@@ -423,6 +431,7 @@ describe('WorkflowRepository', () => {
     const mockLog = {
       id: 'log-1',
       runId: 'run-1',
+      nodeId: 'test-node',
       level: 'info' as const,
       message: 'Test log',
       timestamp: new Date(),
@@ -453,11 +462,10 @@ describe('WorkflowRepository', () => {
     it('should keep only recent runs per workflow', () => {
       repository['workflows'].set('w1', mockWorkflow);
 
-      // Create 102 runs (should keep only 100)
       const runs = Array.from({ length: 102 }, (_, i) => ({
         ...mockRun,
         id: `run-${i}`,
-        startedAt: new Date(Date.now() - i * 1000), // Different timestamps
+        startedAt: new Date(Date.now() - i * 1000),
       }));
 
       runs.forEach((run) => repository.createRun(run));
@@ -467,11 +475,10 @@ describe('WorkflowRepository', () => {
       const remainingRuns = repository.getRunsByWorkflow('w1');
       expect(remainingRuns).toHaveLength(100);
 
-      // Should keep the most recent ones
       const runIds = remainingRuns.map((r) => r.id);
-      expect(runIds).toContain('run-0'); // Most recent
-      expect(runIds).toContain('run-99'); // 100th most recent
-      expect(runIds).not.toContain('run-101'); // Oldest, should be deleted
+      expect(runIds).toContain('run-0');
+      expect(runIds).toContain('run-99');
+      expect(runIds).not.toContain('run-101');
     });
   });
 });

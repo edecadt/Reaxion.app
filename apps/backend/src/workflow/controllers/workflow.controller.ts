@@ -187,13 +187,31 @@ export class WorkflowController {
     }
   }
 
+  @Get('runs/:runId/logs')
+  async getRunLogs(@Param('runId') runId: string) {
+    const run = await this.workflowEngineService.getRunStatus(runId);
+    if (!run) {
+      throw new NotFoundException(`Workflow run with id '${runId}' not found`);
+    }
+    return await this.workflowEngineService.getRunLogs(runId);
+  }
+
+  @Get('runs/:runId')
+  async getRunDetails(@Param('runId') runId: string) {
+    const run = await this.workflowEngineService.getRunStatus(runId);
+    if (!run) {
+      throw new NotFoundException(`Workflow run with id '${runId}' not found`);
+    }
+    return run;
+  }
+
   @Get(':id/runs')
-  getWorkflowRuns(@Param('id') id: string) {
+  async getWorkflowRuns(@Param('id') id: string) {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
       throw new NotFoundException(`Workflow with id '${id}' not found`);
     }
 
-    return this.workflowEngineService.getWorkflowRuns(id);
+    return await this.workflowEngineService.getWorkflowRuns(id);
   }
 }
