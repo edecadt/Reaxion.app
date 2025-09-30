@@ -7,9 +7,11 @@ import {
   View,
   Switch,
   Pressable,
+  Alert,
 } from "react-native";
 import { useWorkflowBuilder } from "./builder/use-workflow-builder";
-import { getAbout, type AboutService } from "../lib/api";
+import { getAbout, type AboutService, createWorkflow } from "../lib/api";
+import type { CreateWorkflowDto, Workflow } from "@reaxion/common";
 
 export default function CreateWorkflowScreen() {
   const { state, actions } = useWorkflowBuilder();
@@ -32,6 +34,9 @@ export default function CreateWorkflowScreen() {
   const [services, setServices] = useState<AboutService[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [servicesError, setServicesError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [created, setCreated] = useState<Workflow | null>(null);
 
   const loadServices = useCallback(async () => {
     setLoadingServices(true);
@@ -156,6 +161,69 @@ export default function CreateWorkflowScreen() {
 
   const isFormValid = validationErrors.length === 0;
 
+  const serialize = useCallback((): CreateWorkflowDto => {
+    const nodes = state.nodes.map((n) => {
+      let params: Record<string, unknown> = { ...(n.params as any) };
+      if (n.serviceId === "timer" && n.reactionId === "wait") {
+        const raw = String((params as any)?.seconds ?? "0");
+        const num = Number(raw);
+        params = { ...params, seconds: Number.isFinite(num) ? num : 0 };
+      }
+      const next = Array.isArray(n.next)
+        ? n.next.length > 0
+          ? n.next
+          : undefined
+        : n.next;
+      return {
+        id: n.id,
+        serviceId: n.serviceId,
+        actionId: n.actionId,
+        reactionId: n.reactionId,
+        params,
+        next,
+      };
+    });
+    return {
+      id: state.id,
+      name: state.name,
+      active: state.active,
+      nodes,
+    };
+  }, [state]);
+
+  const handleCreate = useCallback(async () => {
+    if (!isFormValid) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const dto = serialize();
+      const result = await createWorkflow(dto);
+      setCreated(result);
+      Alert.alert(
+        "Workflow créé",
+        result.webhookToken
+          ? `ID: ${result.id}\nToken webhook: ${result.webhookToken}`
+          : `ID: ${result.id}`,
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Erreur inconnue";
+      setCreateError(message);
+      if (
+        message.toLowerCase().includes("already exists") ||
+        message.toLowerCase().includes("existe déjà")
+      ) {
+        const newId = uuidv4();
+        actions.setMeta({ id: newId });
+        Alert.alert(
+          "Identifiant dupliqué",
+          `Un nouvel identifiant a été généré: ${newId}. Réessayez.`,
+        );
+      }
+    } finally {
+      setCreating(false);
+    }
+  }, [isFormValid, serialize, actions]);
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Créer un workflow</Text>
@@ -192,9 +260,12 @@ export default function CreateWorkflowScreen() {
       </View>
 
       <Pressable
-        disabled={!isFormValid}
-        style={[styles.primaryButton, !isFormValid && styles.buttonDisabled]}
-        onPress={() => {}}
+        disabled={!isFormValid || creating}
+        style={[
+          styles.primaryButton,
+          (!isFormValid || creating) && styles.buttonDisabled,
+        ]}
+        onPress={handleCreate}
       >
         <Text style={styles.primaryButtonText}>Créer</Text>
       </Pressable>
@@ -225,6 +296,25 @@ export default function CreateWorkflowScreen() {
           </View>
         )}
       </View>
+
+      {createError && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Erreur</Text>
+          <Text style={styles.errorText}>{createError}</Text>
+        </View>
+      )}
+
+      {created && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Workflow créé</Text>
+          <Text style={styles.cardText}>ID: {created.id}</Text>
+          {created.webhookToken && (
+            <Text style={styles.cardText}>
+              Token webhook: {created.webhookToken}
+            </Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Validation</Text>
