@@ -18,6 +18,8 @@ export type PluginContextBase = {
   logger: LoggerService;
   connection?: PluginConnection | null;
   state?: PluginState;
+  webhookEvents?: any;
+  workflowToken?: string;
 };
 
 export type PluginActionContext = PluginContextBase & {

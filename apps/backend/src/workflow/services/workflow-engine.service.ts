@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import { Workflow } from '../types/workflow.types';
+import { Workflow, Node as WorkflowNode } from '../types/workflow.types';
 import { WorkflowRepository } from '../repositories/workflow.repository';
 import { WorkflowRunService } from './workflow-run.service';
 
@@ -58,24 +58,28 @@ export class WorkflowEngineService implements OnModuleInit {
         return;
       }
 
-      let shouldTrigger = false;
-      for (const triggerNode of triggerNodes) {
-        const shouldFire = await this.runService.checkTrigger(
-          workflow,
-          triggerNode,
-        );
-        if (shouldFire) {
-          shouldTrigger = true;
+      let triggeredData: Record<string, unknown> | null = null;
+      let triggerNode: WorkflowNode | undefined = undefined;
+
+      for (const node of triggerNodes) {
+        const result = await this.runService.checkTrigger(workflow, node);
+        if (result) {
+          triggeredData = result;
+          triggerNode = node;
           break;
         }
       }
 
-      if (!shouldTrigger) {
+      if (!triggeredData || !triggerNode) {
         this.logger.debug(`No triggers ready for workflow ${workflow.id}`);
         return;
       }
 
-      const runId = this.runService.startWorkflowRun(workflow);
+      const runId = this.runService.startWorkflowRun(
+        workflow,
+        triggerNode,
+        triggeredData,
+      );
       this.logger.log(
         `Started workflow run: ${runId} for workflow: ${workflow.name}`,
       );
@@ -170,7 +174,7 @@ export class WorkflowEngineService implements OnModuleInit {
     const simpleWorkflow: Workflow = {
       id: 'simple-timer-log',
       name: 'Simple Timer → Log',
-      active: true,
+      active: false,
       nodes: [
         {
           id: 'timer-trigger',
@@ -196,7 +200,7 @@ export class WorkflowEngineService implements OnModuleInit {
     const complexWorkflow: Workflow = {
       id: 'complex-parallel-workflow',
       name: 'Complex Parallel Workflow',
-      active: true,
+      active: false,
       nodes: [
         {
           id: 'timer-start',
@@ -248,7 +252,34 @@ export class WorkflowEngineService implements OnModuleInit {
       ],
     };
 
-    await this.createWorkflow(simpleWorkflow);
-    await this.createWorkflow(complexWorkflow);
+    const webhookTestWorkflow: Workflow = {
+      id: 'webhook-test-workflow',
+      name: 'Webhook Test → Log',
+      active: true,
+      webhookToken: 'test-token-123',
+      userId: 'test-user',
+      nodes: [
+        {
+          id: 'webhook-trigger',
+          serviceId: 'test-webhook',
+          actionId: 'on-test-webhook',
+          params: {},
+          next: 'log-webhook',
+        },
+        {
+          id: 'log-webhook',
+          serviceId: 'timer',
+          reactionId: 'log',
+          params: {
+            message: '🎉 Webhook received and workflow triggered!',
+            level: 'info',
+          },
+        },
+      ],
+    };
+
+    this.createWorkflow(simpleWorkflow);
+    this.createWorkflow(complexWorkflow);
+    this.createWorkflow(webhookTestWorkflow);
   }
 }

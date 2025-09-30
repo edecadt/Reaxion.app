@@ -1,6 +1,8 @@
+-- AlterTable
 ALTER TABLE "public"."User" ALTER COLUMN "passwordHash" DROP DEFAULT,
 ALTER COLUMN "updatedAt" DROP DEFAULT;
 
+-- CreateTable
 CREATE TABLE "public"."Workflow" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -12,6 +14,7 @@ CREATE TABLE "public"."Workflow" (
     CONSTRAINT "Workflow_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
 CREATE TABLE "public"."WorkflowNode" (
     "id" TEXT NOT NULL,
     "workflowId" TEXT NOT NULL,
@@ -27,12 +30,17 @@ CREATE TABLE "public"."WorkflowNode" (
     CONSTRAINT "WorkflowNode_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateIndex
 CREATE INDEX "Workflow_userId_idx" ON "public"."Workflow"("userId");
 
+-- CreateIndex
 CREATE INDEX "WorkflowNode_workflowId_idx" ON "public"."WorkflowNode"("workflowId");
 
+-- CreateIndex
 CREATE INDEX "WorkflowNode_workflowId_position_idx" ON "public"."WorkflowNode"("workflowId", "position");
 
+-- AddForeignKey
 ALTER TABLE "public"."Workflow" ADD CONSTRAINT "Workflow_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
 ALTER TABLE "public"."WorkflowNode" ADD CONSTRAINT "WorkflowNode_workflowId_fkey" FOREIGN KEY ("workflowId") REFERENCES "public"."Workflow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
