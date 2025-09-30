@@ -10,6 +10,7 @@ import {
   ParallelExecution,
 } from '../types/workflow.types';
 import { WorkflowRepository } from '../repositories/workflow.repository';
+import { PrismaService } from '../../prisma.service';
 import { ServiceRegistry } from '../../services/service-registry.service';
 import type {
   PluginActionContext,
@@ -22,6 +23,7 @@ export class WorkflowRunService {
 
   constructor(
     private readonly repository: WorkflowRepository,
+    private readonly prisma: PrismaService,
     private readonly serviceRegistry: ServiceRegistry,
   ) {}
 
@@ -35,7 +37,7 @@ export class WorkflowRunService {
       logs: [],
     };
 
-    this.repository.createRun(run);
+    void this.createRun(run);
     this.addLog(runId, 'info', `Started workflow run for "${workflow.name}"`);
 
     void this.executeWorkflow(workflow, runId).catch((error) => {
@@ -443,8 +445,47 @@ export class WorkflowRunService {
     }
   }
 
+  private async createRun(run: WorkflowRun): Promise<void> {
+    try {
+      await this.prisma.workflowRun.create({
+        data: {
+          id: run.id,
+          workflowId: run.workflowId,
+          status: run.status,
+          startedAt: run.startedAt,
+        },
+      });
+      this.repository.createRun(run);
+    } catch (error) {
+      this.logger.error(`Failed to create workflow run ${run.id}:`, error);
+      this.repository.createRun(run);
+    }
+  }
+
+  private async updateRun(
+    runId: string,
+    updates: Partial<WorkflowRun>,
+  ): Promise<void> {
+    try {
+      const updateData: any = {};
+      if (updates.status !== undefined) updateData.status = updates.status;
+      if (updates.completedAt !== undefined)
+        updateData.completedAt = updates.completedAt;
+      if (updates.error !== undefined) updateData.error = updates.error;
+
+      await this.prisma.workflowRun.update({
+        where: { id: runId },
+        data: updateData,
+      });
+      this.repository.updateRun(runId, updates);
+    } catch (error) {
+      this.logger.error(`Failed to update workflow run ${runId}:`, error);
+      this.repository.updateRun(runId, updates);
+    }
+  }
+
   private completeRun(runId: string): void {
-    this.repository.updateRun(runId, {
+    void this.updateRun(runId, {
       status: 'completed',
       completedAt: new Date(),
       currentNodeId: undefined,
@@ -453,7 +494,7 @@ export class WorkflowRunService {
   }
 
   private failRun(runId: string, error: string): void {
-    this.repository.updateRun(runId, {
+    void this.updateRun(runId, {
       status: 'failed',
       completedAt: new Date(),
       error,
@@ -478,7 +519,7 @@ export class WorkflowRunService {
       data,
     };
 
-    this.repository.addLog(runId, log);
+    void this.createLog(log);
 
     if (data && Object.keys(data).length > 0) {
       this.logger.log(
@@ -489,16 +530,151 @@ export class WorkflowRunService {
     }
   }
 
-  getRunStatus(runId: string): WorkflowRun | undefined {
-    return this.repository.getRun(runId);
+  private async createLog(log: WorkflowLog): Promise<void> {
+    try {
+      await this.prisma.workflowRunLog.create({
+        data: {
+          id: log.id,
+          runId: log.runId,
+          nodeId: log.nodeId || null,
+          message: log.message,
+          level: log.level,
+          timestamp: log.timestamp,
+        },
+      });
+      this.repository.addLog(log.runId, log);
+    } catch (error) {
+      this.logger.error(`Failed to create workflow log ${log.id}:`, error);
+      this.repository.addLog(log.runId, log);
+    }
   }
 
-  getRunLogs(runId: string): WorkflowLog[] {
-    return this.repository.getRunLogs(runId);
+  async getRunStatus(runId: string): Promise<WorkflowRun | null> {
+    try {
+      const dbRun = await this.prisma.workflowRun.findUnique({
+        where: { id: runId },
+        include: {
+          logs: {
+            orderBy: { timestamp: 'asc' },
+          },
+        },
+      });
+
+      if (!dbRun) {
+        return this.repository.getRun(runId) || null;
+      }
+
+      return {
+        id: dbRun.id,
+        workflowId: dbRun.workflowId,
+        status: dbRun.status as 'running' | 'completed' | 'failed',
+        startedAt: dbRun.startedAt,
+        completedAt: dbRun.completedAt || undefined,
+        error: dbRun.error || undefined,
+        logs: dbRun.logs.map((log) => ({
+          id: log.id,
+          runId: log.runId,
+          nodeId: log.nodeId || '',
+          level: log.level as 'info' | 'warn' | 'error',
+          message: log.message,
+          timestamp: log.timestamp,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get run status for ${runId}:`, error);
+      return this.repository.getRun(runId) || null;
+    }
   }
 
-  getAllRuns(): WorkflowRun[] {
-    return this.repository.getAllRuns();
+  async getRunLogs(runId: string): Promise<WorkflowLog[]> {
+    try {
+      const logs = await this.prisma.workflowRunLog.findMany({
+        where: { runId },
+        orderBy: { timestamp: 'asc' },
+      });
+
+      return logs.map((log) => ({
+        id: log.id,
+        runId: log.runId,
+        nodeId: log.nodeId || '',
+        level: log.level as 'info' | 'warn' | 'error',
+        message: log.message,
+        timestamp: log.timestamp,
+      }));
+    } catch (error) {
+      this.logger.error(`Failed to get logs for run ${runId}:`, error);
+      return this.repository.getRunLogs(runId);
+    }
+  }
+
+  async getAllRuns(): Promise<WorkflowRun[]> {
+    try {
+      const dbRuns = await this.prisma.workflowRun.findMany({
+        orderBy: { startedAt: 'desc' },
+        include: {
+          logs: {
+            orderBy: { timestamp: 'asc' },
+          },
+        },
+      });
+
+      return dbRuns.map((run) => ({
+        id: run.id,
+        workflowId: run.workflowId,
+        status: run.status as 'running' | 'completed' | 'failed',
+        startedAt: run.startedAt,
+        completedAt: run.completedAt || undefined,
+        error: run.error || undefined,
+        logs: run.logs.map((log) => ({
+          id: log.id,
+          runId: log.runId,
+          nodeId: log.nodeId || '',
+          level: log.level as 'info' | 'warn' | 'error',
+          message: log.message,
+          timestamp: log.timestamp,
+        })),
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get all runs:', error);
+      return this.repository.getAllRuns();
+    }
+  }
+
+  async getWorkflowRuns(workflowId: string): Promise<WorkflowRun[]> {
+    try {
+      const dbRuns = await this.prisma.workflowRun.findMany({
+        where: { workflowId },
+        orderBy: { startedAt: 'desc' },
+        include: {
+          logs: {
+            orderBy: { timestamp: 'asc' },
+          },
+        },
+      });
+
+      return dbRuns.map((run) => ({
+        id: run.id,
+        workflowId: run.workflowId,
+        status: run.status as 'running' | 'completed' | 'failed',
+        startedAt: run.startedAt,
+        completedAt: run.completedAt || undefined,
+        error: run.error || undefined,
+        logs: run.logs.map((log) => ({
+          id: log.id,
+          runId: log.runId,
+          nodeId: log.nodeId || '',
+          level: log.level as 'info' | 'warn' | 'error',
+          message: log.message,
+          timestamp: log.timestamp,
+        })),
+      }));
+    } catch (error) {
+      this.logger.error(
+        `Failed to get runs for workflow ${workflowId}:`,
+        error,
+      );
+      return this.repository.getRunsByWorkflow(workflowId);
+    }
   }
 
   async checkTrigger(workflow: Workflow, triggerNode: Node): Promise<boolean> {

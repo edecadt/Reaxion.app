@@ -234,7 +234,6 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     try {
       const moduleUrl = pathToFileURL(service.handlerPath);
       moduleUrl.searchParams.set('t', Date.now().toString());
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const moduleExports = await import(moduleUrl.href);
       return this.resolveHandlerExport(
         service.id,
@@ -367,9 +366,7 @@ export class ServiceRegistry implements OnModuleInit, OnModuleDestroy {
     for (const watcher of this.watchers) {
       try {
         watcher.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     this.watchers = [];

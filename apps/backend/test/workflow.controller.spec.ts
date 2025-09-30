@@ -179,7 +179,7 @@ describe('WorkflowController', () => {
   });
 
   describe('getWorkflowRuns', () => {
-    it('returns list of runs', () => {
+    it('returns list of runs', async () => {
       const mockRun = {
         id: 'r1',
         workflowId: 'w1',
@@ -189,9 +189,9 @@ describe('WorkflowController', () => {
       };
 
       service.getWorkflow.mockReturnValue(mockWorkflow);
-      service.getWorkflowRuns.mockReturnValue([mockRun]);
+      service.getWorkflowRuns.mockResolvedValue([mockRun]);
 
-      const res = controller.getWorkflowRuns('w1');
+      const res = await controller.getWorkflowRuns('w1');
       expect(res).toEqual([mockRun]);
     });
   });
