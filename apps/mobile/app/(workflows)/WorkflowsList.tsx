@@ -3,6 +3,7 @@ import { Link } from "expo-router";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,9 +18,11 @@ export default function WorkflowsList() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent;
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await getWorkflows();
@@ -29,7 +32,16 @@ export default function WorkflowsList() {
       setError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+    }
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await load({ silent: true });
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -38,7 +50,12 @@ export default function WorkflowsList() {
   }, []);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <Text style={styles.title}>Mes workflows</Text>
       {loading ? (
         <View style={[styles.card, { alignItems: "center", gap: 8 }]}>
@@ -48,7 +65,7 @@ export default function WorkflowsList() {
       ) : error ? (
         <View style={[styles.card, { gap: 8 }]}>
           <Text style={[styles.cardText, styles.errorText]}>{error}</Text>
-          <Pressable style={styles.secondaryButton} onPress={load}>
+          <Pressable style={styles.secondaryButton} onPress={() => load()}>
             <Text style={styles.secondaryButtonText}>Réessayer</Text>
           </Pressable>
         </View>
