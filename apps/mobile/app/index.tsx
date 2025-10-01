@@ -1,3 +1,4 @@
+import { Link } from "expo-router";
 import {
   Platform,
   Pressable,
@@ -6,7 +7,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { Link } from "expo-router";
 import { isApiConfigured, tryGetApiUrl } from "../src/lib/api-config";
 
 export default function Home() {

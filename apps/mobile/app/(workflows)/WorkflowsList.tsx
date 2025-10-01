@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "expo-router";
+import type { Workflow } from "@reaxion/common";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +10,6 @@ import {
   Text,
   View,
 } from "react-native";
-import type { Workflow } from "@reaxion/common";
 import {
   getWorkflows,
   activateWorkflow,
@@ -198,13 +198,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: "#111827" },
   card: {
     width: "100%",
-    maxWidth: 720,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e5e7eb",
     padding: 16,
     backgroundColor: "#fafafa",
-    gap: 6,
+    gap: 8,
   },
   cardTitle: { fontSize: 18, fontWeight: "600", color: "#111827" },
   cardText: { fontSize: 14, color: "#374151" },
