@@ -63,14 +63,38 @@ export default function WorkflowsList() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Vos workflows</Text>
           <View style={{ gap: 8 }}>
-            {workflows.map((w) => (
-              <View key={w.id} style={styles.itemRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.itemTitle}>{w.name}</Text>
-                  <Text style={styles.itemMeta}>ID: {w.id}</Text>
+            {workflows.map((w) => {
+              const entry = computeEntryNode(w);
+              return (
+                <View key={w.id} style={styles.itemRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.itemHeaderRow}>
+                      <Text style={styles.itemTitle}>{w.name}</Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          w.active ? styles.badgeOn : styles.badgeOff,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            w.active ? styles.badgeTextOn : styles.badgeTextOff,
+                          ]}
+                        >
+                          {w.active ? "Actif" : "Inactif"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.itemMeta}>ID: {w.id}</Text>
+                    <Text style={styles.itemMeta}>
+                      Nœuds: {w.nodes?.length ?? 0} • Entrée:{" "}
+                      {entry ?? "(introuvable)"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
       )}
@@ -115,6 +139,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  itemHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemTitle: { fontSize: 16, fontWeight: "600", color: "#111827" },
   itemMeta: { fontSize: 12, color: "#6b7280" },
   primaryButton: {
@@ -134,4 +159,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   secondaryButtonText: { color: "#111827", fontSize: 14, fontWeight: "600" },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#e5e7eb",
+  },
+  badgeText: { fontSize: 11, fontWeight: "700" },
+  badgeOn: { backgroundColor: "#d1fae5" },
+  badgeOff: { backgroundColor: "#fee2e2" },
+  badgeTextOn: { color: "#065f46" },
+  badgeTextOff: { color: "#991b1b" },
 });
+
+function computeEntryNode(w: Workflow): string | null {
+  if (!w.nodes || w.nodes.length === 0) return null;
+  const referenced = new Set<string>();
+  for (const n of w.nodes) {
+    const next = (n as any).next as undefined | string | string[];
+    if (typeof next === "string") referenced.add(next);
+    else if (Array.isArray(next)) next.forEach((id) => referenced.add(id));
+  }
+  const entry = w.nodes.find((n) => !referenced.has(n.id));
+  return entry ? entry.id : null;
+}
