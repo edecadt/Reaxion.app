@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useWorkflowBuilder } from "./builder/use-workflow-builder";
+import { useWorkflowBuilder } from "../../src/workflows/use-workflow-builder";
 import type { Workflow, CreateWorkflowDto } from "@reaxion/common";
 import {
   getAbout,
@@ -18,9 +18,9 @@ import {
   activateWorkflow,
   deactivateWorkflow,
   executeWorkflow,
-} from "../lib/api";
-import { tryGetApiUrl } from "../lib/api-config";
-import { useToast } from "../components/Toast";
+} from "../../src/lib/api";
+import { tryGetApiUrl } from "../../src/lib/api-config";
+import { useToast } from "../../src/components/Toast";
 
 export default function CreateWorkflowWizard() {
   const toast = useToast();

@@ -98,6 +98,10 @@ export async function getAbout(): Promise<AboutPayload> {
   return await request<AboutPayload>("GET", "/about.json");
 }
 
+export async function getWorkflows(): Promise<Workflow[]> {
+  return await request<Workflow[]>("GET", "/workflows");
+}
+
 export async function createWorkflow(
   dto: CreateWorkflowDto,
 ): Promise<Workflow> {
