@@ -7,36 +7,7 @@ import {
   Node,
 } from '../types/workflow.types';
 
-const STATIC_WORKFLOWS: Workflow[] = [
-  {
-    id: 'github-issue-static',
-    name: 'GitHub Issue → Log (static)',
-    active: true,
-    webhookToken: 'github-static-token',
-    userId: 'static-user',
-    nodes: [
-      {
-        id: 'github-trigger',
-        serviceId: 'github',
-        actionId: 'issue-created',
-        params: {
-          owner: 'ownername',
-          repo: 'repository',
-        },
-        next: 'log-reaction',
-      },
-      {
-        id: 'log-reaction',
-        serviceId: 'timer',
-        reactionId: 'log',
-        params: {
-          message: 'New GitHub issue detected',
-          level: 'info',
-        },
-      },
-    ],
-  },
-];
+const STATIC_WORKFLOWS: Workflow[] = [];
 
 @Injectable()
 export class WorkflowRepository implements OnModuleInit {

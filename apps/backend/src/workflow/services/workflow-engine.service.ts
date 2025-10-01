@@ -276,32 +276,6 @@ export class WorkflowEngineService implements OnModuleInit {
         },
       ],
     };
-    const githubWorkflow: Workflow = {
-      id: 'github-issue-notifier',
-      name: 'GitHub → Log',
-      active: true,
-      webhookToken: 'mon-token-secret',
-      userId: 'dev-user',
-      nodes: [
-        {
-          id: 'github-trigger',
-          serviceId: 'github',
-          actionId: 'issue-created',
-          params: { owner: 'octocat', repo: 'hello-world' },
-          next: 'log-reaction',
-        },
-        {
-          id: 'log-reaction',
-          serviceId: 'timer',
-          reactionId: 'log',
-          params: {
-            message: 'New issue: {{issue_title}} ({{issue_url}})',
-            level: 'info',
-          },
-        },
-      ],
-    };
-    await this.createWorkflow(githubWorkflow);
 
     this.createWorkflow(simpleWorkflow);
     this.createWorkflow(complexWorkflow);
