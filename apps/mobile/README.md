@@ -89,3 +89,19 @@ Notes UI
 
 - États loading/empty/error intégrés avec spinners et toasts.
 - Les erreurs techniques sont simplifiées en messages lisibles.
+
+## Mes workflows (liste)
+
+Pré‑requis
+
+- Définissez `EXPO_PUBLIC_API_URL` dans `apps/mobile/.env` (ex: `http://localhost:8080`).
+
+Accès
+
+- Depuis l’accueil, appuyez sur le bouton « Mes workflows » pour ouvrir la liste.
+- Tirez pour rafraîchir (pull‑to‑refresh) afin de recharger les workflows.
+
+Affichage
+
+- Chaque élément affiche: nom, badge « Actif/Inactif », ID, nombre de nœuds et nœud d’entrée.
+- En cas d’erreur réseau/API, un message et un bouton « Réessayer » sont proposés, avec un toast.
