@@ -70,28 +70,68 @@ export class WorkflowRepository implements OnModuleInit {
   async createWorkflow(workflow: Workflow): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
+        const existingUser = await tx.user.findFirst();
+        const user =
+          existingUser ||
+          (await tx.user.create({
+            data: {
+              email: 'dev@example.com',
+              name: 'Dev User',
+              passwordHash: 'dev-password-hash',
+            },
+          }));
+
         await tx.workflow.create({
           data: {
             id: workflow.id,
             name: workflow.name,
             active: workflow.active,
-            userId: 1,
+            userId: user.id,
           },
         });
 
         if (workflow.nodes.length > 0) {
-          await tx.workflowNode.createMany({
-            data: workflow.nodes.map((node, index) => ({
-              id: node.id,
-              workflowId: workflow.id,
-              serviceId: node.serviceId,
-              actionId: node.actionId,
-              reactionId: node.reactionId,
-              params: node.params as any,
-              next: node.next as any,
-              position: index,
-            })),
+          const idMap = new Map<string, string>();
+          for (const n of workflow.nodes) {
+            idMap.set(n.id, `${workflow.id}:${n.id}`);
+          }
+
+          const transformNext = (
+            next: Node['next'],
+          ): string | string[] | undefined => {
+            if (!next) return undefined;
+            if (typeof next === 'string') return idMap.get(next) ?? next;
+            return next.map((id) => idMap.get(id) ?? id);
+          };
+
+          const dbNodes = workflow.nodes.map((node, index) => ({
+            id: idMap.get(node.id)!,
+            workflowId: workflow.id,
+            serviceId: node.serviceId,
+            actionId: node.actionId,
+            reactionId: node.reactionId,
+            params: node.params as any,
+            next: transformNext(node.next) as any,
+            position: index,
+          }));
+
+          await tx.workflowNode.createMany({ data: dbNodes });
+
+          const cacheNodes: Node[] = workflow.nodes.map((node) => ({
+            id: idMap.get(node.id)!,
+            serviceId: node.serviceId,
+            actionId: node.actionId,
+            reactionId: node.reactionId,
+            params: node.params,
+            next: transformNext(node.next),
+          }));
+          this.workflows.set(workflow.id, {
+            id: workflow.id,
+            name: workflow.name,
+            active: workflow.active,
+            nodes: cacheNodes,
           });
+          return;
         }
       });
 
@@ -145,23 +185,57 @@ export class WorkflowRepository implements OnModuleInit {
           });
 
           if (updates.nodes.length > 0) {
-            await tx.workflowNode.createMany({
-              data: updates.nodes.map((node, index) => ({
-                id: node.id,
-                workflowId: id,
-                serviceId: node.serviceId,
-                actionId: node.actionId,
-                reactionId: node.reactionId,
-                params: node.params as any,
-                next: node.next as any,
-                position: index,
-              })),
-            });
+            const idMap = new Map<string, string>();
+            for (const n of updates.nodes) {
+              idMap.set(n.id, `${id}:${n.id}`);
+            }
+            const transformNext = (
+              next: Node['next'],
+            ): string | string[] | undefined => {
+              if (!next) return undefined;
+              if (typeof next === 'string') return idMap.get(next) ?? next;
+              return next.map((nid) => idMap.get(nid) ?? nid);
+            };
+
+            const dbNodes = updates.nodes.map((node, index) => ({
+              id: idMap.get(node.id)!,
+              workflowId: id,
+              serviceId: node.serviceId,
+              actionId: node.actionId,
+              reactionId: node.reactionId,
+              params: node.params as any,
+              next: transformNext(node.next) as any,
+              position: index,
+            }));
+
+            await tx.workflowNode.createMany({ data: dbNodes });
           }
         }
       });
 
-      const updatedWorkflow = { ...existingWorkflow, ...updates };
+      let updatedWorkflow = { ...existingWorkflow, ...updates } as Workflow;
+      if (updates.nodes !== undefined) {
+        const idMap = new Map<string, string>();
+        for (const n of updates.nodes) idMap.set(n.id, `${id}:${n.id}`);
+        const transformNext = (
+          next: Node['next'],
+        ): string | string[] | undefined => {
+          if (!next) return undefined;
+          if (typeof next === 'string') return idMap.get(next) ?? next;
+          return next.map((nid) => idMap.get(nid) ?? nid);
+        };
+        updatedWorkflow = {
+          ...updatedWorkflow,
+          nodes: updates.nodes.map((node) => ({
+            id: idMap.get(node.id)!,
+            serviceId: node.serviceId,
+            actionId: node.actionId,
+            reactionId: node.reactionId,
+            params: node.params,
+            next: transformNext(node.next),
+          })),
+        } as Workflow;
+      }
       this.workflows.set(id, updatedWorkflow);
       this.logger.debug(`Updated workflow ${id} in DB and cache`);
       return true;
