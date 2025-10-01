@@ -503,6 +503,13 @@ export class WorkflowRunService {
   }
 
   private async createRun(run: WorkflowRun): Promise<void> {
+    const isStatic = this.repository.isStaticWorkflow(run.workflowId);
+
+    if (isStatic) {
+      this.repository.createRun(run);
+      return;
+    }
+
     try {
       await this.prisma.workflowRun.create({
         data: {
@@ -523,6 +530,16 @@ export class WorkflowRunService {
     runId: string,
     updates: Partial<WorkflowRun>,
   ): Promise<void> {
+    const cachedRun = this.repository.getRun(runId);
+    const isStatic = cachedRun
+      ? this.repository.isStaticWorkflow(cachedRun.workflowId)
+      : false;
+
+    if (isStatic) {
+      this.repository.updateRun(runId, updates);
+      return;
+    }
+
     const buildUpdateData = () => {
       const updateData: any = {};
       if (updates.status !== undefined) updateData.status = updates.status;
@@ -635,6 +652,16 @@ export class WorkflowRunService {
   }
 
   private async createLog(log: WorkflowLog): Promise<void> {
+    const cachedRun = this.repository.getRun(log.runId);
+    const isStatic = cachedRun
+      ? this.repository.isStaticWorkflow(cachedRun.workflowId)
+      : false;
+
+    if (isStatic) {
+      this.repository.addLog(log.runId, log);
+      return;
+    }
+
     try {
       const maxAttempts = 5;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
