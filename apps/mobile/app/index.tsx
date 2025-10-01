@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { Link } from "expo-router";
-import { isApiConfigured, tryGetApiUrl } from "./lib/api-config";
+import { isApiConfigured, tryGetApiUrl } from "../src/lib/api-config";
 
 export default function Home() {
   const apiOk = isApiConfigured();
@@ -31,6 +31,11 @@ export default function Home() {
           <Text style={styles.cardText}>Base URL: {apiUrl}</Text>
         </View>
       )}
+      <Link href="/(workflows)" asChild>
+        <Pressable style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Mes workflows</Text>
+        </Pressable>
+      </Link>
       <Link href="/(workflows)/create" asChild>
         <Pressable style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>Créer un workflow</Text>
