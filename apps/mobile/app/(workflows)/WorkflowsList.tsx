@@ -10,7 +10,12 @@ import {
   View,
 } from "react-native";
 import type { Workflow } from "@reaxion/common";
-import { getWorkflows } from "../../src/lib/api";
+import {
+  getWorkflows,
+  activateWorkflow,
+  deactivateWorkflow,
+  executeWorkflow,
+} from "../../src/lib/api";
 import { useToast } from "../../src/components/Toast";
 
 export default function WorkflowsList() {
@@ -19,6 +24,7 @@ export default function WorkflowsList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
@@ -42,6 +48,37 @@ export default function WorkflowsList() {
       await load({ silent: true });
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function toggleActive(w: Workflow) {
+    setBusyId(w.id);
+    try {
+      const updated = w.active
+        ? await deactivateWorkflow(w.id)
+        : await activateWorkflow(w.id);
+      setWorkflows((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      toast.success(updated.active ? "Activé" : "Désactivé");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erreur inconnue";
+      toast.error(msg);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function runNow(w: Workflow) {
+    setBusyId(w.id);
+    try {
+      const { runId } = await executeWorkflow(w.id);
+      toast.success(`Exécution démarrée: ${runId}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erreur inconnue";
+      toast.error(msg);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -109,6 +146,30 @@ export default function WorkflowsList() {
                       {entry ?? "(introuvable)"}
                     </Text>
                   </View>
+                  <View style={styles.actionsCol}>
+                    <Pressable
+                      onPress={() => toggleActive(w)}
+                      disabled={busyId === w.id}
+                      style={[
+                        styles.secondaryButton,
+                        busyId === w.id && styles.buttonDisabled,
+                      ]}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {w.active ? "Désactiver" : "Activer"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => runNow(w)}
+                      disabled={busyId === w.id}
+                      style={[
+                        styles.secondaryButton,
+                        busyId === w.id && styles.buttonDisabled,
+                      ]}
+                    >
+                      <Text style={styles.secondaryButtonText}>Exécuter</Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -159,6 +220,7 @@ const styles = StyleSheet.create({
   itemHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemTitle: { fontSize: 16, fontWeight: "600", color: "#111827" },
   itemMeta: { fontSize: 12, color: "#6b7280" },
+  actionsCol: { gap: 8 },
   primaryButton: {
     marginTop: 8,
     backgroundColor: "#111827",
@@ -176,6 +238,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   secondaryButtonText: { color: "#111827", fontSize: 14, fontWeight: "600" },
+  buttonDisabled: { opacity: 0.5 },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
