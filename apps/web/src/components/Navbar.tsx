@@ -26,12 +26,30 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--background))]/60">
       <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-        <Link
-          href="/"
-          className="text-lg font-semibold text-[hsl(var(--foreground))]"
-        >
-          Reaxion.app
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link
+            href="/"
+            className="text-lg font-semibold text-[hsl(var(--foreground))]"
+          >
+            Reaxion.app
+          </Link>
+          <Link
+            href="/workflows"
+            className={cn(
+              "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
+            )}
+          >
+            Mes workflows
+          </Link>
+          <Link
+            href="/workflows/create"
+            className={cn(
+              "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
+            )}
+          >
+            Créer un workflow
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           {user ? (
             <>
