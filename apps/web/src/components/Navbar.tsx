@@ -34,6 +34,14 @@ export default function Navbar() {
             Reaxion.app
           </Link>
           <Link
+            href="/workflows"
+            className={cn(
+              "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
+            )}
+          >
+            Mes workflows
+          </Link>
+          <Link
             href="/workflows/create"
             className={cn(
               "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
