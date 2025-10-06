@@ -7,19 +7,41 @@ import {
   Node,
 } from '../types/workflow.types';
 
+const STATIC_WORKFLOWS: Workflow[] = [];
+
 @Injectable()
 export class WorkflowRepository implements OnModuleInit {
   private readonly logger = new Logger(WorkflowRepository.name);
   private workflows: Map<string, Workflow> = new Map();
   private runs: Map<string, WorkflowRun> = new Map();
   private logs: Map<string, WorkflowLog[]> = new Map();
+  private readonly staticWorkflowIds = new Set<string>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
     this.logger.log('Initializing WorkflowRepository with cache warming...');
     await this.warmCache();
+    this.registerStaticWorkflows();
     this.logger.log(`Cache warmed with ${this.workflows.size} workflows`);
+  }
+
+  private registerStaticWorkflows(): void {
+    for (const workflow of STATIC_WORKFLOWS) {
+      if (this.workflows.has(workflow.id)) {
+        continue;
+      }
+
+      this.logger.debug(
+        `Registering static workflow ${workflow.id} (not persisted to DB)`,
+      );
+      this.workflows.set(workflow.id, workflow);
+      this.staticWorkflowIds.add(workflow.id);
+    }
+  }
+
+  isStaticWorkflow(workflowId: string): boolean {
+    return this.staticWorkflowIds.has(workflowId);
   }
 
   private async warmCache(): Promise<void> {
