@@ -390,6 +390,12 @@ importers:
 
   packages/typescript-config: {}
 
+  services/github:
+    dependencies:
+      "@area/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   services/test-webhook:
     dependencies:
       "@area/sdk":

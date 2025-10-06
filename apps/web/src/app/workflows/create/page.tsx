@@ -13,7 +13,6 @@ import {
 } from "../../../components/ui/card";
 import { Input } from "../../../components/ui/input";
 import { Switch } from "../../../components/ui/switch";
-import { Textarea } from "../../../components/ui/textarea";
 import {
   activateWorkflow,
   API_URL,
@@ -857,6 +856,71 @@ function NodeSection({
   showActions,
   showReactions,
 }: NodeSectionProps) {
+  const serviceIdOf = (service: AboutService) =>
+    service.id || toId(service.name);
+  const actionIdOf = (
+    serviceId: string,
+    action: AboutService["actions"][number],
+  ) => action.id || knownActionIdFor(serviceId, action.name);
+  const reactionIdOf = (
+    serviceId: string,
+    reaction: AboutService["reactions"][number],
+  ) => reaction.id || knownReactionIdFor(serviceId, reaction.name);
+
+  const renderField = (
+    node: NodeInfo,
+    key: string,
+    type: string | undefined,
+  ) => {
+    const params = (node.params as Record<string, unknown> | undefined) ?? {};
+    const current = params[key];
+    const normalized = (type || "string").toLowerCase();
+
+    if (normalized === "boolean") {
+      return (
+        <div key={key} className="flex items-center justify-between">
+          <p className="text-sm font-medium">{key}</p>
+          <Switch
+            checked={Boolean(current)}
+            onCheckedChange={(checked) =>
+              onSetParams(node.id, { ...params, [key]: checked })
+            }
+          />
+        </div>
+      );
+    }
+
+    if (normalized === "number") {
+      return (
+        <div key={key} className="space-y-1">
+          <p className="text-sm font-medium">{key}</p>
+          <Input
+            value={String((current as number | string | undefined) ?? "")}
+            onChange={(event) =>
+              onSetParams(node.id, {
+                ...params,
+                [key]: event.target.value.replace(/[^0-9.-]/g, ""),
+              })
+            }
+            inputMode="decimal"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div key={key} className="space-y-1">
+        <p className="text-sm font-medium">{key}</p>
+        <Input
+          value={String((current as string | undefined) ?? "")}
+          onChange={(event) =>
+            onSetParams(node.id, { ...params, [key]: event.target.value })
+          }
+        />
+      </div>
+    );
+  };
+
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -867,10 +931,22 @@ function NodeSection({
       ) : (
         nodes.map((node) => {
           const selectedService = services.find(
-            (service) => toId(service.name) === (node.serviceId || ""),
+            (service) => serviceIdOf(service) === (node.serviceId || ""),
           );
           const actionsList = selectedService?.actions ?? [];
           const reactionsList = selectedService?.reactions ?? [];
+          const selectedAction = actionsList.find(
+            (action) =>
+              actionIdOf(node.serviceId || "", action) === node.actionId,
+          );
+          const selectedReaction = reactionsList.find(
+            (reaction) =>
+              reactionIdOf(node.serviceId || "", reaction) === node.reactionId,
+          );
+          const inputDefinition = (selectedAction?.input ??
+            selectedReaction?.input ??
+            {}) as Record<string, string>;
+          const inputKeys = Object.keys(inputDefinition);
 
           return (
             <Card key={node.id}>
@@ -905,11 +981,11 @@ function NodeSection({
                   <p className="text-sm font-medium">Service</p>
                   <div className="flex flex-wrap gap-2">
                     {services.map((service) => {
-                      const id = toId(service.name);
+                      const id = serviceIdOf(service);
                       const active = id === node.serviceId;
                       return (
                         <Chip
-                          key={service.name}
+                          key={service.id ?? service.name}
                           active={active}
                           onClick={() => onSelectService(node.id, id)}
                         >
@@ -927,14 +1003,14 @@ function NodeSection({
                         <p className="text-sm font-medium">Triggers</p>
                         <div className="flex flex-wrap gap-2">
                           {actionsList.map((action) => {
-                            const actionId = knownActionIdFor(
+                            const actionId = actionIdOf(
                               node.serviceId || "",
-                              action.name,
+                              action,
                             );
                             const active = node.actionId === actionId;
                             return (
                               <Chip
-                                key={action.name}
+                                key={action.id ?? action.name}
                                 active={active}
                                 onClick={() =>
                                   onSelectAction?.(node.id, actionId)
@@ -953,14 +1029,14 @@ function NodeSection({
                         <p className="text-sm font-medium">Réactions</p>
                         <div className="flex flex-wrap gap-2">
                           {reactionsList.map((reaction) => {
-                            const reactionId = knownReactionIdFor(
+                            const reactionId = reactionIdOf(
                               node.serviceId || "",
-                              reaction.name,
+                              reaction,
                             );
                             const active = node.reactionId === reactionId;
                             return (
                               <Chip
-                                key={reaction.name}
+                                key={reaction.id ?? reaction.name}
                                 active={active}
                                 onClick={() =>
                                   onSelectReaction?.(node.id, reactionId)
@@ -976,102 +1052,17 @@ function NodeSection({
 
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Paramètres</p>
-                      {node.serviceId === "timer" &&
-                        node.actionId === "cron" && (
-                          <div className="space-y-1">
-                            <Input
-                              value={String(
-                                (node.params as { expression?: string })
-                                  ?.expression ?? "",
-                              )}
-                              onChange={(event) =>
-                                onSetParams(node.id, {
-                                  ...node.params,
-                                  expression: event.target.value,
-                                })
-                              }
-                              placeholder="*/20 * * * * *"
-                            />
-                            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                              Format: ss mm HH JJ MM AAA
-                            </p>
-                          </div>
-                        )}
-
-                      {node.serviceId === "timer" &&
-                        node.reactionId === "log" && (
-                          <div className="space-y-3">
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">Message</p>
-                              <Textarea
-                                value={String(
-                                  (node.params as { message?: string })
-                                    ?.message ?? "",
-                                )}
-                                onChange={(event) =>
-                                  onSetParams(node.id, {
-                                    ...node.params,
-                                    message: event.target.value,
-                                  })
-                                }
-                                placeholder="Votre message"
-                                rows={3}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">Niveau</p>
-                              <div className="flex flex-wrap gap-2">
-                                {LEVELS.map((level) => (
-                                  <Chip
-                                    key={level.id}
-                                    active={
-                                      (node.params as { level?: string })
-                                        ?.level === level.id
-                                    }
-                                    onClick={() =>
-                                      onSetParams(node.id, {
-                                        ...node.params,
-                                        level: level.id,
-                                      })
-                                    }
-                                  >
-                                    {level.label}
-                                  </Chip>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                      {node.serviceId === "timer" &&
-                        node.reactionId === "wait" && (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">Secondes</p>
-                            <Input
-                              value={String(
-                                (node.params as { seconds?: unknown })
-                                  ?.seconds ?? "0",
-                              )}
-                              onChange={(event) =>
-                                onSetParams(node.id, {
-                                  ...node.params,
-                                  seconds: event.target.value.replace(
-                                    /[^0-9]/g,
-                                    "",
-                                  ),
-                                })
-                              }
-                              inputMode="numeric"
-                            />
-                          </div>
-                        )}
-
-                      {node.serviceId === "test-webhook" &&
-                        node.actionId === "on-test-webhook" && (
-                          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                            Aucun paramètre requis pour ce trigger.
-                          </p>
-                        )}
+                      {inputKeys.length === 0 ? (
+                        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                          Aucun paramètre requis
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {inputKeys.map((key) =>
+                            renderField(node, key, inputDefinition[key]),
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
