@@ -14,14 +14,19 @@ export class AppService {
     const services = this.serviceRegistry.getPublicServices();
 
     const formattedServices = services.map((service) => ({
+      id: service.id,
       name: service.name.toLowerCase(),
       actions: service.actions.map((action) => ({
+        id: action.id,
         name: action.name,
         description: action.description,
+        input: action.input ?? {},
       })),
       reactions: service.reactions.map((reaction) => ({
+        id: reaction.id,
         name: reaction.name,
         description: reaction.description,
+        input: reaction.input ?? {},
       })),
     }));
 

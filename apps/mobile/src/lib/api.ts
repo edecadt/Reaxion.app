@@ -63,9 +63,20 @@ async function request<T>(
 }
 
 export type AboutService = {
+  id?: string;
   name: string;
-  actions: { name: string; description: string }[];
-  reactions: { name: string; description: string }[];
+  actions: {
+    id?: string;
+    name: string;
+    description: string;
+    input?: Record<string, string>;
+  }[];
+  reactions: {
+    id?: string;
+    name: string;
+    description: string;
+    input?: Record<string, string>;
+  }[];
 };
 
 export type AboutPayload = {
