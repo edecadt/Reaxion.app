@@ -14,7 +14,6 @@ export class AppService {
     const services = this.serviceRegistry.getPublicServices();
 
     const formattedServices = services.map((service) => ({
-      // Keep original name behavior for compatibility, expose id for clients
       id: service.id,
       name: service.name.toLowerCase(),
       actions: service.actions.map((action) => ({
