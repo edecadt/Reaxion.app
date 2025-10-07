@@ -21,6 +21,7 @@ import {
 } from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { computeEntryNode } from "../../workflows/utils";
+import { getAuthToken } from "../../lib/auth";
 
 type LoadState = "idle" | "loading" | "error";
 
@@ -33,18 +34,17 @@ export default function WorkflowsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw =
-      typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    setToken(raw);
+    setToken(getAuthToken());
   }, []);
 
   const load = useCallback(
     async (opts?: { silent?: boolean }) => {
+      if (!token) return;
       const silent = !!opts?.silent;
       if (!silent) setState("loading");
       setError(null);
       try {
-        const data = await getWorkflows(token ?? undefined);
+        const data = await getWorkflows(token);
         setWorkflows(data);
         setState("idle");
       } catch (err) {
@@ -57,18 +57,21 @@ export default function WorkflowsPage() {
   );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (token) {
+      void load();
+    }
+  }, [token, load]);
 
   const hasWorkflows = workflows.length > 0;
 
   const handleToggleActive = useCallback(
     async (workflow: Workflow) => {
+      if (!token) return;
       setBusyId(workflow.id);
       try {
         const updated = workflow.active
-          ? await deactivateWorkflow(workflow.id, token ?? undefined)
-          : await activateWorkflow(workflow.id, token ?? undefined);
+          ? await deactivateWorkflow(workflow.id, token)
+          : await activateWorkflow(workflow.id, token);
         setWorkflows((prev) =>
           prev.map((item) => (item.id === updated.id ? updated : item)),
         );
@@ -85,9 +88,10 @@ export default function WorkflowsPage() {
 
   const handleExecute = useCallback(
     async (workflow: Workflow) => {
+      if (!token) return;
       setBusyId(workflow.id);
       try {
-        await executeWorkflow(workflow.id, token ?? undefined);
+        await executeWorkflow(workflow.id, token);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erreur inconnue";
         setError(message);

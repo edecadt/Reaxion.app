@@ -15,6 +15,7 @@ import {
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { register } from "../../../lib/api";
+import { setAuthToken, setUser } from "../../../lib/auth";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -29,8 +30,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const data = await register(email, password, name.trim() || undefined);
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      setAuthToken(data.token);
+      setUser(data.user);
       window.location.href = "/";
     } catch (err) {
       const message =

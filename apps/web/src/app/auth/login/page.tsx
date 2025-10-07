@@ -15,6 +15,7 @@ import {
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { login } from "../../../lib/api";
+import { setAuthToken, setUser } from "../../../lib/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,8 +29,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await login(email, password);
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      setAuthToken(data.token);
+      setUser(data.user);
       window.location.href = "/";
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
