@@ -10,6 +10,8 @@ import { AuthService } from './auth.service';
 
 type RegisterDto = { email: string; password: string; name?: string };
 type LoginDto = { email: string; password: string };
+type ForgotPasswordDto = { email: string };
+type ResetPasswordDto = { token: string; password: string };
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +35,30 @@ export class AuthController {
       throw new BadRequestException('email and password are required');
     }
     const result = await this.auth.login({ email, password });
+    return result;
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    const { email } = body;
+    console.log('Forgot password request received for:', email);
+    if (!email) {
+      throw new BadRequestException('email is required');
+    }
+    const result = await this.auth.forgotPassword(email);
+    console.log('Forgot password result:', result);
+    return result;
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    const { token, password } = body;
+    if (!token || !password) {
+      throw new BadRequestException('token and password are required');
+    }
+    const result = await this.auth.resetPassword(token, password);
     return result;
   }
 }

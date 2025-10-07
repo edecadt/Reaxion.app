@@ -8,13 +8,15 @@ datasource db {
 }
 
 model User {
-  id           Int        @id @default(autoincrement())
-  email        String     @unique
-  name         String?
-  passwordHash String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  workflows    Workflow[]
+  id                 Int        @id @default(autoincrement())
+  email              String     @unique
+  name               String?
+  passwordHash       String
+  resetToken         String?    @unique
+  resetTokenExpiry   DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  workflows          Workflow[]
 }
 
 model Workflow {

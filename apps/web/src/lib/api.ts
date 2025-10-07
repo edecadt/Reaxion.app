@@ -204,3 +204,18 @@ export async function register(
     body: { email, password, name },
   });
 }
+
+export async function forgotPassword(
+  email: string,
+): Promise<{ message: string }> {
+  return await request("POST", "/auth/forgot-password", { body: { email } });
+}
+
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<{ message: string }> {
+  return await request("POST", "/auth/reset-password", {
+    body: { token, password },
+  });
+}

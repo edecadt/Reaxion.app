@@ -585,9 +585,7 @@ export class WorkflowRunService {
                       error: cached.error ?? null,
                     },
                   });
-                } catch {
-                  // ignore create races
-                }
+                } catch {}
               }
             }
             await this.delay(50 * attempt);
