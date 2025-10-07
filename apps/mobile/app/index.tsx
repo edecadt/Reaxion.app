@@ -6,16 +6,34 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { isApiConfigured, tryGetApiUrl } from "../src/lib/api-config";
+import { useAuth } from "../src/hooks/useAuth";
 
 export default function Home() {
   const apiOk = isApiConfigured();
   const apiUrl = tryGetApiUrl();
+  const { isAuthenticated, user, loading, logout } = useAuth({
+    required: false,
+  });
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#111827" />
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Welcome to Reaxion</Text>
-      <Text style={styles.subtitle}>Your mobile app is ready.</Text>
+      {isAuthenticated && user ? (
+        <Text style={styles.subtitle}>Hello, {user.name || user.email}!</Text>
+      ) : (
+        <Text style={styles.subtitle}>Your mobile app is ready.</Text>
+      )}
 
       {!apiOk ? (
         <View style={[styles.card, styles.errorCard]}>
@@ -31,21 +49,48 @@ export default function Home() {
           <Text style={styles.cardText}>Base URL: {apiUrl}</Text>
         </View>
       )}
-      <Link href="/(workflows)" asChild>
-        <Pressable style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Mes workflows</Text>
-        </Pressable>
-      </Link>
-      <Link href="/(workflows)/create" asChild>
-        <Pressable style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Créer un workflow</Text>
-        </Pressable>
-      </Link>
+
+      {isAuthenticated ? (
+        <>
+          <Link href="/(workflows)" asChild>
+            <Pressable style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Mes workflows</Text>
+            </Pressable>
+          </Link>
+          <Link href="/(workflows)/create" asChild>
+            <Pressable style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Créer un workflow</Text>
+            </Pressable>
+          </Link>
+          <Pressable style={styles.secondaryButton} onPress={logout}>
+            <Text style={styles.secondaryButtonText}>Logout</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Link href="/(auth)/login" asChild>
+            <Pressable style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Sign in</Text>
+            </Pressable>
+          </Link>
+          <Link href="/(auth)/register" asChild>
+            <Pressable style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Create account</Text>
+            </Pressable>
+          </Link>
+        </>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
   container: {
     flexGrow: 1,
     alignItems: "center",
@@ -101,9 +146,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
+    width: "100%",
+    maxWidth: 300,
   },
   primaryButtonText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  secondaryButton: {
+    marginTop: 8,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#111827",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    width: "100%",
+    maxWidth: 300,
+  },
+  secondaryButtonText: {
+    color: "#111827",
     fontSize: 16,
     fontWeight: "600",
     textAlign: "center",

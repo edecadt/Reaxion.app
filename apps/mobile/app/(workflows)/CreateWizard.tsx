@@ -21,9 +21,11 @@ import {
 } from "../../src/lib/api";
 import { tryGetApiUrl } from "../../src/lib/api-config";
 import { useToast } from "../../src/components/Toast";
+import { useAuth } from "../../src/hooks/useAuth";
 
 export default function CreateWorkflowWizard() {
   const toast = useToast();
+  const { token } = useAuth();
   const { state, actions } = useWorkflowBuilder();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -42,14 +44,14 @@ export default function CreateWorkflowWizard() {
     setLoadingServices(true);
     setServicesError(null);
     try {
-      const about = await getAbout();
+      const about = await getAbout(token ?? undefined);
       setServices(about.server.services);
     } catch (e) {
       setServicesError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
       setLoadingServices(false);
     }
-  }, []);
+  }, [token]);
   useEffect(() => void loadServices(), [loadServices]);
 
   const existingIds = useMemo(
@@ -226,7 +228,7 @@ export default function CreateWorkflowWizard() {
     setCreateError(null);
     try {
       const dto = serialize();
-      const result = await createWorkflow(dto);
+      const result = await createWorkflow(dto, token ?? undefined);
       setCreated(result);
       toast.success("Workflow créé");
       setStep(4);
@@ -245,28 +247,28 @@ export default function CreateWorkflowWizard() {
     } finally {
       setCreating(false);
     }
-  }, [isFormValid, serialize, actions, toast]);
+  }, [isFormValid, serialize, actions, toast, token]);
 
   const handleToggleActive = useCallback(async () => {
     if (!created) return;
     setActionLoading(true);
     try {
       const updated = created.active
-        ? await deactivateWorkflow(created.id)
-        : await activateWorkflow(created.id);
+        ? await deactivateWorkflow(created.id, token ?? undefined)
+        : await activateWorkflow(created.id, token ?? undefined);
       setCreated(updated);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
       setActionLoading(false);
     }
-  }, [created, toast]);
+  }, [created, toast, token]);
 
   const handleExecute = useCallback(async () => {
     if (!created) return;
     setActionLoading(true);
     try {
-      const { runId } = await executeWorkflow(created.id);
+      const { runId } = await executeWorkflow(created.id, token ?? undefined);
       setLastRunId(runId);
       toast.success("Exécution démarrée");
     } catch (e) {
@@ -274,7 +276,7 @@ export default function CreateWorkflowWizard() {
     } finally {
       setActionLoading(false);
     }
-  }, [created, toast]);
+  }, [created, toast, token]);
 
   const goPrev = () => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
   const goNext = () =>
