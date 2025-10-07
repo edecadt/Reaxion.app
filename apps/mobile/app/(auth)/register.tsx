@@ -31,7 +31,8 @@ export default function RegisterScreen() {
       const data = await register(email, password, name.trim() || undefined);
       await setAuthToken(data.token);
       await setUser(data.user);
-      router.replace("/");
+
+      router.replace("/(workflows)");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Registration failed";

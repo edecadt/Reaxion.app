@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import { clearAuth, getUser } from "../lib/auth";
 
 type User = { id: number; email: string; name?: string | null };
 
@@ -12,13 +13,11 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("user");
-    setUser(raw ? (JSON.parse(raw) as User) : null);
+    setUser(getUser());
   }, []);
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuth();
     setUser(null);
     window.location.href = "/auth/login";
   };

@@ -21,15 +21,16 @@ model User {
 }
 
 model Workflow {
-  id        String         @id @default(cuid())
-  name      String
-  active    Boolean        @default(false)
-  userId    Int
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nodes     WorkflowNode[]
-  runs      WorkflowRun[]
+  id           String         @id @default(cuid())
+  name         String
+  active       Boolean        @default(false)
+  userId       Int
+  webhookToken String?        @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes        WorkflowNode[]
+  runs         WorkflowRun[]
 
   @@index([userId])
 }

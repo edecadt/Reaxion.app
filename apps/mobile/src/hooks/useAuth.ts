@@ -19,24 +19,34 @@ export function useAuth(options?: { redirectTo?: string; required?: boolean }) {
     let mounted = true;
 
     const loadAuth = async () => {
-      const rawToken = await getAuthToken();
-      const rawUser = await getUser();
+      try {
+        const rawToken = await getAuthToken();
+        const rawUser = await getUser();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (!rawToken) {
+        if (!rawToken) {
+          setToken(null);
+          setUser(null);
+          setLoading(false);
+          if (required) {
+            router.replace(redirectTo);
+          }
+          return;
+        }
+
+        setToken(rawToken);
+        setUser(rawUser);
+        setLoading(false);
+      } catch (error) {
+        if (!mounted) return;
         setToken(null);
         setUser(null);
         setLoading(false);
         if (required) {
-          router.replace(redirectTo as any);
+          router.replace(redirectTo);
         }
-        return;
       }
-
-      setToken(rawToken);
-      setUser(rawUser);
-      setLoading(false);
     };
 
     loadAuth();
@@ -50,7 +60,7 @@ export function useAuth(options?: { redirectTo?: string; required?: boolean }) {
     await clearAuth();
     setToken(null);
     setUser(null);
-    router.replace("/auth/login" as any);
+    router.replace("/(auth)/login");
   };
 
   return {

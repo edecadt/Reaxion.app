@@ -17,9 +17,6 @@ export class WebhookEventsService {
   private events: Map<string, WebhookEvent[]> = new Map();
   private readonly MAX_EVENTS_PER_SERVICE = 100;
 
-  /**
-   * Stocke un événement webhook pour un service
-   */
   storeEvent(
     serviceId: string,
     webhookId: string,
@@ -56,9 +53,6 @@ export class WebhookEventsService {
     );
   }
 
-  /**
-   * Récupère les événements non traités pour un service/webhook
-   */
   getUnprocessedEvents(
     serviceId: string,
     webhookId: string,
@@ -70,15 +64,27 @@ export class WebhookEventsService {
 
     return events.filter((event) => {
       if (event.processed) return false;
-      if (userId && event.userId && event.userId !== userId) return false;
-      if (workflowToken && event.workflowToken !== workflowToken) return false;
+
+      if (
+        event.userId !== undefined &&
+        userId !== undefined &&
+        event.userId !== userId
+      ) {
+        return false;
+      }
+
+      if (
+        workflowToken &&
+        event.workflowToken &&
+        event.workflowToken !== workflowToken
+      ) {
+        return false;
+      }
+
       return true;
     });
   }
 
-  /**
-   * Récupère le dernier événement non traité
-   */
   getLastUnprocessedEvent(
     serviceId: string,
     webhookId: string,
@@ -94,9 +100,6 @@ export class WebhookEventsService {
     return events.length > 0 ? (events[events.length - 1] ?? null) : null;
   }
 
-  /**
-   * Marque un événement comme traité
-   */
   markAsProcessed(serviceId: string, webhookId: string, timestamp: Date): void {
     const key = `${serviceId}:${webhookId}`;
     const events = this.events.get(key) || [];
@@ -111,9 +114,6 @@ export class WebhookEventsService {
     }
   }
 
-  /**
-   * Nettoie les événements anciens (plus de 1 heure)
-   */
   cleanupOldEvents(): void {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     let totalCleaned = 0;
