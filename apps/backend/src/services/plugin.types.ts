@@ -14,7 +14,7 @@ export type PluginConnection = {
 
 export type PluginContextBase = {
   serviceId: string;
-  userId?: string;
+  userId?: number;
   logger: LoggerService;
   connection?: PluginConnection | null;
   state?: PluginState;

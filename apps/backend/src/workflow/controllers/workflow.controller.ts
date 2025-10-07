@@ -11,12 +11,17 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { WorkflowEngineService } from '../services/workflow-engine.service';
 import type { CreateWorkflowDto, UpdateWorkflowDto } from '../dto';
 import type { Workflow } from '../types/workflow.types';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { WorkflowOwnershipGuard } from '../guards/workflow-ownership.guard';
+import { CurrentUser } from '../../auth/current-user.decorator';
 
 @Controller('workflows')
+@UseGuards(JwtAuthGuard)
 export class WorkflowController {
   constructor(private readonly workflowEngineService: WorkflowEngineService) {}
 
@@ -24,6 +29,7 @@ export class WorkflowController {
   @HttpCode(HttpStatus.CREATED)
   async createWorkflow(
     @Body() createWorkflowDto: CreateWorkflowDto,
+    @CurrentUser() user: { sub: number; email: string },
   ): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(
       createWorkflowDto.id,
@@ -47,7 +53,7 @@ export class WorkflowController {
         params: node.params || {},
       })),
       webhookToken: hasWebhookTrigger ? this.generateWebhookToken() : undefined,
-      userId: createWorkflowDto.userId,
+      userId: user.sub,
     };
 
     await this.workflowEngineService.createWorkflow(workflow);
@@ -62,8 +68,11 @@ export class WorkflowController {
   }
 
   @Get()
-  getAllWorkflows(@Query('active') active?: string): Workflow[] {
-    const workflows = this.workflowEngineService.getAllWorkflows();
+  getAllWorkflows(
+    @Query('active') active?: string,
+    @CurrentUser() user?: { sub: number; email: string },
+  ): Workflow[] {
+    const workflows = this.workflowEngineService.getAllWorkflows(user?.sub);
 
     if (active !== undefined) {
       const isActive = active === 'true';
@@ -74,6 +83,7 @@ export class WorkflowController {
   }
 
   @Get(':id')
+  @UseGuards(WorkflowOwnershipGuard)
   getWorkflowById(@Param('id') id: string): Workflow {
     const workflow = this.workflowEngineService.getWorkflow(id);
     if (!workflow) {
@@ -83,6 +93,7 @@ export class WorkflowController {
   }
 
   @Patch(':id')
+  @UseGuards(WorkflowOwnershipGuard)
   async updateWorkflow(
     @Param('id') id: string,
     @Body() updateWorkflowDto: UpdateWorkflowDto,
@@ -120,6 +131,7 @@ export class WorkflowController {
   }
 
   @Delete(':id')
+  @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteWorkflow(@Param('id') id: string): Promise<void> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
@@ -136,6 +148,7 @@ export class WorkflowController {
   }
 
   @Post(':id/activate')
+  @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
   async activateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
@@ -154,6 +167,7 @@ export class WorkflowController {
   }
 
   @Post(':id/deactivate')
+  @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
   async deactivateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
@@ -172,6 +186,7 @@ export class WorkflowController {
   }
 
   @Post(':id/execute')
+  @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
   executeWorkflow(@Param('id') id: string): { runId: string } {
     try {
@@ -206,6 +221,7 @@ export class WorkflowController {
   }
 
   @Get(':id/runs')
+  @UseGuards(WorkflowOwnershipGuard)
   async getWorkflowRuns(@Param('id') id: string) {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {

@@ -30,6 +30,7 @@ import {
   knownReactionIdFor,
   toId,
 } from "../../../workflows/utils";
+import { getAuthToken } from "../../../lib/auth";
 
 const LEVELS: Array<{ id: string; label: string }> = [
   { id: "info", label: "info" },
@@ -58,14 +59,12 @@ type NodeSectionProps = {
 
 export default function CreateWorkflowPage() {
   const { state, actions } = useWorkflowBuilder();
-
-  const [step, setStep] = useState<Step>(1);
   const [token, setToken] = useState<string | null>(null);
 
+  const [step, setStep] = useState<Step>(1);
+
   useEffect(() => {
-    const raw =
-      typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    setToken(raw);
+    setToken(getAuthToken());
   }, []);
 
   useEffect(() => () => actions.reset(), [actions]);
@@ -87,10 +86,11 @@ export default function CreateWorkflowPage() {
   const [servicesError, setServicesError] = useState<string | null>(null);
 
   const loadServices = useCallback(async () => {
+    if (!token) return;
     setLoadingServices(true);
     setServicesError(null);
     try {
-      const about = await getAbout(token ?? undefined);
+      const about = await getAbout(token);
       setServices(about.server.services);
     } catch (error) {
       const message =
@@ -102,8 +102,10 @@ export default function CreateWorkflowPage() {
   }, [token]);
 
   useEffect(() => {
-    void loadServices();
-  }, [loadServices]);
+    if (token) {
+      void loadServices();
+    }
+  }, [token, loadServices]);
 
   const existingIds = useMemo(
     () => new Set(state.nodes.map((node) => node.id)),
@@ -320,13 +322,13 @@ export default function CreateWorkflowPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const handleCreate = useCallback(async () => {
-    if (!isFormValid || creating) return;
+    if (!isFormValid || creating || !token) return;
     setCreating(true);
     setCreateError(null);
     setFeedback(null);
     try {
       const dto = serialize();
-      const result = await createWorkflow(dto, token ?? undefined);
+      const result = await createWorkflow(dto, token);
       setCreated(result);
       setStep(4);
       setFeedback("Workflow créé avec succès");
@@ -351,13 +353,13 @@ export default function CreateWorkflowPage() {
   }, [isFormValid, creating, serialize, token, actions]);
 
   const handleToggleActive = useCallback(async () => {
-    if (!created) return;
+    if (!created || !token) return;
     setActionLoading(true);
     setFeedback(null);
     try {
       const updated = created.active
-        ? await deactivateWorkflow(created.id, token ?? undefined)
-        : await activateWorkflow(created.id, token ?? undefined);
+        ? await deactivateWorkflow(created.id, token)
+        : await activateWorkflow(created.id, token);
       setCreated(updated);
     } catch (error) {
       const message =
@@ -369,11 +371,11 @@ export default function CreateWorkflowPage() {
   }, [created, token]);
 
   const handleExecute = useCallback(async () => {
-    if (!created) return;
+    if (!created || !token) return;
     setActionLoading(true);
     setFeedback(null);
     try {
-      const { runId } = await executeWorkflow(created.id, token ?? undefined);
+      const { runId } = await executeWorkflow(created.id, token);
       setLastRunId(runId);
       setFeedback("Exécution démarrée");
     } catch (error) {

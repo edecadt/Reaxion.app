@@ -252,7 +252,7 @@ export class WorkflowRunService {
       serviceId: node.serviceId,
       actionId: node.actionId!,
       params: node.params,
-      userId: workflow?.userId || 'test-user',
+      userId: workflow?.userId || 1,
       state: context.state,
       logger: this.logger,
       webhookEvents: this.webhookEvents,
@@ -270,12 +270,13 @@ export class WorkflowRunService {
     if (!handler) {
       throw new Error(`Service "${node.serviceId}" not found`);
     }
+    const workflow = this.repository.getWorkflow(context.workflowId);
     const reactionContext: PluginReactionContext = {
       serviceId: node.serviceId,
       reactionId: node.reactionId!,
       params: node.params,
       previousOutput: context.previousOutput,
-      userId: 'test-user',
+      userId: workflow?.userId || 1,
       state: context.state,
       logger: this.logger,
     };
@@ -850,7 +851,7 @@ export class WorkflowRunService {
         serviceId: triggerNode.serviceId,
         actionId: triggerNode.actionId!,
         params: triggerNode.params,
-        userId: workflow.userId || 'test-user',
+        userId: workflow.userId || 1,
         state: globalState[stateKey] || {},
         logger: this.logger,
         webhookEvents: this.webhookEvents,

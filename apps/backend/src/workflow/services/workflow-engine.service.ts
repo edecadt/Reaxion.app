@@ -96,8 +96,12 @@ export class WorkflowEngineService implements OnModuleInit {
     return this.repository.getWorkflow(id);
   }
 
-  getAllWorkflows(): Workflow[] {
-    return this.repository.getAllWorkflows();
+  getAllWorkflows(userId?: number): Workflow[] {
+    const workflows = this.repository.getAllWorkflows();
+    if (userId) {
+      return workflows.filter((w) => w.userId === userId);
+    }
+    return workflows;
   }
 
   async updateWorkflow(
@@ -256,7 +260,7 @@ export class WorkflowEngineService implements OnModuleInit {
       name: 'Webhook Test → Log',
       active: true,
       webhookToken: 'test-token-123',
-      userId: 'test-user',
+      userId: 1,
       nodes: [
         {
           id: 'webhook-trigger',
