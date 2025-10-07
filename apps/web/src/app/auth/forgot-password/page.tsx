@@ -14,25 +14,29 @@ import {
 } from "../../../components/ui/card";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
-import { login } from "../../../lib/api";
+import { forgotPassword } from "../../../lib/api";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setSuccess(false);
     setLoading(true);
+    console.log("Sending forgot password request for:", email);
     try {
-      const data = await login(email, password);
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      window.location.href = "/";
+      const result = await forgotPassword(email);
+      console.log("Forgot password result:", result);
+      setSuccess(true);
+      setEmail("");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Login failed";
+      console.error("Forgot password error:", err);
+      const message =
+        err instanceof Error ? err.message : "Failed to send reset email";
       setError(message);
     } finally {
       setLoading(false);
@@ -43,11 +47,20 @@ export default function LoginPage() {
     <div className="grid w-full place-items-center">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to your Reaxion account.</CardDescription>
+          <CardTitle>Reset your password</CardTitle>
+          <CardDescription>
+            Enter your email address and we'll send you a link to reset your
+            password.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {error ? <Alert>{error}</Alert> : null}
+          {error ? <Alert variant="error">{error}</Alert> : null}
+          {success ? (
+            <Alert variant="success">
+              If an account exists with that email, a password reset link has
+              been sent. Please check your inbox.
+            </Alert>
+          ) : null}
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -61,36 +74,17 @@ export default function LoginPage() {
                 autoComplete="email"
               />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-sm font-medium text-[hsl(var(--foreground))] underline-offset-4 hover:underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Sending…" : "Send reset link"}
             </Button>
           </form>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            No account yet?{" "}
+            Remember your password?{" "}
             <Link
-              href="/auth/register"
+              href="/auth/login"
               className="font-medium text-[hsl(var(--foreground))] underline-offset-4 hover:underline"
             >
-              Create one now
+              Sign in
             </Link>
           </p>
         </CardContent>
