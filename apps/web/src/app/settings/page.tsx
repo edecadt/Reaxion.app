@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { Alert } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -28,7 +28,7 @@ type ServiceWithConnection = AboutService & {
   isConnected: boolean;
 };
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -344,5 +344,20 @@ export default function SettingsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8">
+          <h1 className="text-3xl font-bold mb-6">Service Connections</h1>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
   );
 }

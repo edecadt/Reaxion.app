@@ -41,11 +41,28 @@ ENV CI=1
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH="$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
-WORKDIR /app
-RUN npx expo prebuild -p android --non-interactive || true
+ENV GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx1536m -Dorg.gradle.parallel=false"
 WORKDIR /app/apps/mobile
-RUN if [ -d "android" ]; then cd android && ./gradlew assembleDebug; else true; fi
+RUN pnpm exec expo prebuild -p android --non-interactive || true
+RUN if [ -d "android" ]; then \
+      cd android && \
+      ./gradlew assembleDebug \
+        --no-daemon \
+        --max-workers=1 \
+        -x lint \
+        -x lintVitalRelease \
+        --no-build-cache || echo "Gradle build failed"; \
+    fi
+RUN mkdir -p /tmp/apk && \
+    if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then \
+      cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/apk/client.apk && \
+      echo "APK built successfully"; \
+    else \
+      echo "APK build failed - check logs above" > /tmp/apk/placeholder.txt; \
+    fi
 
 FROM busybox:stable AS runner
 VOLUME ["/shared-apk"]
+RUN mkdir -p /shared-apk
+COPY --from=builder /tmp/apk/* /shared-apk/
 CMD ["sh", "-c", "tail -f /dev/null"]

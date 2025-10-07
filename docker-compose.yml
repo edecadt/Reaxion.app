@@ -1,5 +1,3 @@
-version: "3.9"
-
 volumes:
   apk_shared: {}
   turbo-cache: {}
@@ -23,6 +21,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    env_file:
+      - .env
     command: redis-server --requirepass ${REDIS_PASSWORD}
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -47,8 +47,8 @@ services:
     environment:
       NODE_ENV: ${BACKEND_NODE_ENV:-production}
       PORT: ${BACKEND_PORT:-8080}
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
     ports:
       - "${BACKEND_PORT:-8080}:${BACKEND_PORT:-8080}"
 
@@ -67,8 +67,8 @@ services:
     environment:
       NODE_ENV: development
       PORT: ${BACKEND_PORT:-8080}
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-1}
     command: ["pnpm", "--filter", "backend", "start:dev"]
     volumes:
