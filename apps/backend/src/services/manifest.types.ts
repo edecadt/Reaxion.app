@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { AuthConfig } from '@area/sdk';
 
 export type ManifestDictionary = Record<string, unknown>;
 
@@ -21,7 +22,7 @@ export type ServiceManifest = {
   version: string;
   description: string;
   logo: string;
-  auth: string;
+  auth: AuthConfig;
   actions: ManifestAction[];
   reactions: ManifestReaction[];
   webhooks: ManifestWebhook[];
@@ -73,6 +74,76 @@ const ensureArray = (value: unknown, field: string): unknown[] => {
   }
 
   return value;
+};
+
+const ensureStringArray = (value: unknown, field: string): string[] => {
+  const arr = ensureArray(value, field);
+  return arr.map((entry, index) =>
+    ensureNonEmptyString(entry, `${field}[${index}]`),
+  );
+};
+
+const parseAuthConfig = (value: unknown, serviceId: string): AuthConfig => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ManifestValidationError('auth must be an object');
+  }
+
+  const auth = value as Record<string, unknown>;
+  const type = ensureNonEmptyString(auth.type, 'auth.type').toLowerCase();
+
+  switch (type) {
+    case 'none':
+      return { type: 'none' };
+    case 'api_key': {
+      const keyLocation = ensureNonEmptyString(
+        auth.keyLocation,
+        'auth.keyLocation',
+      ).toLowerCase();
+      if (keyLocation !== 'header' && keyLocation !== 'query') {
+        throw new ManifestValidationError(
+          'auth.keyLocation must be "header" or "query"',
+        );
+      }
+
+      const apiKeyConfig: AuthConfig = {
+        type: 'api_key',
+        keyName: ensureNonEmptyString(auth.keyName, 'auth.keyName'),
+        keyLocation: keyLocation as 'header' | 'query',
+      };
+
+      if (auth.description !== undefined) {
+        apiKeyConfig.description = ensureNonEmptyString(
+          auth.description,
+          'auth.description',
+        );
+      }
+
+      return apiKeyConfig;
+    }
+    case 'oauth2': {
+      const scopes = ensureStringArray(auth.scopes, 'auth.scopes');
+
+      return {
+        type: 'oauth2',
+        authorizationUrl: ensureNonEmptyString(
+          auth.authorizationUrl,
+          'auth.authorizationUrl',
+        ),
+        tokenUrl: ensureNonEmptyString(auth.tokenUrl, 'auth.tokenUrl'),
+        scopes,
+        clientIdEnvVar: ensureNonEmptyString(
+          auth.clientIdEnvVar,
+          'auth.clientIdEnvVar',
+        ),
+        clientSecretEnvVar: ensureNonEmptyString(
+          auth.clientSecretEnvVar,
+          'auth.clientSecretEnvVar',
+        ),
+      };
+    }
+    default:
+      throw new ManifestValidationError(`Unsupported auth type: ${type}`);
+  }
 };
 
 const parseFlowDefinition = (
@@ -148,7 +219,7 @@ export const validateManifest = (
   const version = ensureNonEmptyString(manifest.version, 'version');
   const description = ensureNonEmptyString(manifest.description, 'description');
   const logo = ensureNonEmptyString(manifest.logo, 'logo');
-  const auth = ensureNonEmptyString(manifest.auth, 'auth');
+  const auth = parseAuthConfig(manifest.auth, id);
 
   const actionsRaw = ensureArray(manifest.actions, 'actions');
   const reactionsRaw = ensureArray(manifest.reactions, 'reactions');

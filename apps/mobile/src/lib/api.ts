@@ -62,9 +62,27 @@ async function request<T>(
   return data as T;
 }
 
+export type AboutServiceAuth =
+  | { type: "none" }
+  | {
+      type: "oauth2";
+      authorizationUrl: string;
+      tokenUrl: string;
+      scopes: string[];
+      clientIdEnvVar: string;
+      clientSecretEnvVar: string;
+    }
+  | {
+      type: "api_key";
+      keyName: string;
+      keyLocation: "header" | "query";
+      description?: string;
+    };
+
 export type AboutService = {
   id?: string;
   name: string;
+  auth?: AboutServiceAuth | string;
   actions: {
     id?: string;
     name: string;

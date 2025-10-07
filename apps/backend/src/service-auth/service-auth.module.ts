@@ -1,0 +1,15 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ServiceAuthController } from './service-auth.controller';
+import { ServiceAuthService } from './service-auth.service';
+import { OAuth2Service } from './oauth2.service';
+import { PrismaService } from '../prisma.service';
+import { ServicesModule } from '../services/services.module';
+
+@Module({
+  imports: [ServicesModule, ConfigModule],
+  controllers: [ServiceAuthController],
+  providers: [ServiceAuthService, OAuth2Service, PrismaService],
+  exports: [ServiceAuthService, OAuth2Service],
+})
+export class ServiceAuthModule {}

@@ -49,6 +49,16 @@ export default function Navbar() {
           >
             Créer un workflow
           </Link>
+          {user && (
+            <Link
+              href="/settings"
+              className={cn(
+                "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
+              )}
+            >
+              Connexions
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {user ? (

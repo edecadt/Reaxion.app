@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ServicesModule } from './services/services.module';
 import { WorkflowModule } from './workflow/workflow.module';
+import { ServiceAuthModule } from './service-auth/service-auth.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     }),
     AuthModule,
     ServicesModule,
+    ServiceAuthModule,
     WorkflowModule,
   ],
   controllers: [AppController],
