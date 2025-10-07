@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+
 import { AppModule } from './app.module';
 
 const loggerContext = 'Bootstrap';
@@ -42,6 +44,35 @@ async function bootstrap() {
   const rawPort = configService.get<string>('PORT');
   const parsedPort = rawPort ? Number(rawPort) : NaN;
   const listenPort = Number.isFinite(parsedPort) ? parsedPort : 4000;
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Reaxion API')
+    .setDescription(
+      'Comprehensive API documentation for the Reaxion automation backend.',
+    )
+    .setVersion('1.0.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'JWT access token',
+        in: 'header',
+      },
+      'access-token',
+    )
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
+    deepScanRoutes: true,
+  });
+  SwaggerModule.setup('docs', app, swaggerDocument, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+    },
+    customSiteTitle: 'Reaxion API Docs',
+  });
 
   if (!rawPort) {
     Logger.warn(
