@@ -45,8 +45,12 @@ async function request<T>(
     signal: signal ?? controller.signal,
   };
 
+  const normalizedBaseUrl = API_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  const url = `${normalizedBaseUrl}/${normalizedPath}`;
+
   try {
-    const res = await fetch(`${API_URL}${path}`, init);
+    const res = await fetch(url, init);
     const text = await res.text();
     const isJson = (res.headers.get("content-type") || "").includes(
       "application/json",
