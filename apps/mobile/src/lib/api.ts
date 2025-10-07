@@ -27,7 +27,9 @@ async function request<T>(
 ): Promise<T> {
   const { body, token, timeoutMs = 10000, signal } = options;
   const baseUrl = getApiUrl();
-  const url = `${baseUrl}${path}`;
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  const url = `${normalizedBaseUrl}/${normalizedPath}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
