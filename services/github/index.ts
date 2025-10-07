@@ -54,7 +54,34 @@ export default createService({
   logo: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
   auth: {
     type: "oauth2",
-    scopes: ["repo"],
+    authorizationUrl: "https://github.com/login/oauth/authorize",
+    tokenUrl: "https://github.com/login/oauth/access_token",
+    scopes: ["repo", "user"],
+    clientIdEnvVar: "GITHUB_CLIENT_ID",
+    clientSecretEnvVar: "GITHUB_CLIENT_SECRET",
+  },
+
+  onConnect: async (ctx) => {
+    if (!ctx.connection?.accessToken) {
+      throw new Error("No access token available");
+    }
+
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${ctx.connection.accessToken}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to authenticate with GitHub: ${response.status}`);
+    }
+
+    const user = await response.json();
+    ctx.logger?.log?.(
+      `GitHub connected successfully for user ${user.login}`,
+      "GitHubService",
+    );
   },
 
   actions: [
@@ -99,12 +126,20 @@ export default createService({
         const payload = event.payload as GitHubIssuesEventPayload | undefined;
 
         if (!payload || payload.action !== "opened" || !payload.issue) {
-          ctx.webhookEvents.markAsProcessed(SERVICE_ID, ISSUES_WEBHOOK_ID, event.timestamp);
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            ISSUES_WEBHOOK_ID,
+            event.timestamp,
+          );
           return null;
         }
 
-        const ownerFilter = String(params.owner ?? "").trim().toLowerCase();
-        const repoFilter = String(params.repo ?? "").trim().toLowerCase();
+        const ownerFilter = String(params.owner ?? "")
+          .trim()
+          .toLowerCase();
+        const repoFilter = String(params.repo ?? "")
+          .trim()
+          .toLowerCase();
 
         const repository = payload.repository;
         const repoFullName = repository?.full_name ?? "";
@@ -117,7 +152,11 @@ export default createService({
             `[github] Ignored issue: owner ${payloadOwner} does not match filter ${ownerFilter}`,
             "GitHubService",
           );
-          ctx.webhookEvents.markAsProcessed(SERVICE_ID, ISSUES_WEBHOOK_ID, event.timestamp);
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            ISSUES_WEBHOOK_ID,
+            event.timestamp,
+          );
           return null;
         }
 
@@ -126,7 +165,11 @@ export default createService({
             `[github] Ignored issue: repo ${payloadRepo} does not match filter ${repoFilter}`,
             "GitHubService",
           );
-          ctx.webhookEvents.markAsProcessed(SERVICE_ID, ISSUES_WEBHOOK_ID, event.timestamp);
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            ISSUES_WEBHOOK_ID,
+            event.timestamp,
+          );
           return null;
         }
 

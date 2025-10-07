@@ -13,6 +13,7 @@ import { WorkflowRepository } from '../repositories/workflow.repository';
 import { PrismaService } from '../../prisma.service';
 import { ServiceRegistry } from '../../services/service-registry.service';
 import { WebhookEventsService } from '../../services/webhook-events.service';
+import { ServiceAuthService } from '../../service-auth/service-auth.service';
 import type {
   PluginActionContext,
   PluginReactionContext,
@@ -27,6 +28,7 @@ export class WorkflowRunService {
     private readonly prisma: PrismaService,
     private readonly serviceRegistry: ServiceRegistry,
     private readonly webhookEvents: WebhookEventsService,
+    private readonly serviceAuthService: ServiceAuthService,
   ) {}
 
   startWorkflowRun(
@@ -247,16 +249,20 @@ export class WorkflowRunService {
     }
 
     const workflow = this.repository.getWorkflow(context.workflowId);
+    const userId = workflow?.userId || 1;
+
+    const connection = await this.loadServiceConnection(userId, node.serviceId);
 
     const actionContext: PluginActionContext = {
       serviceId: node.serviceId,
       actionId: node.actionId!,
       params: node.params,
-      userId: workflow?.userId || 1,
+      userId,
       state: context.state,
       logger: this.logger,
       webhookEvents: this.webhookEvents,
       workflowToken: workflow?.webhookToken,
+      connection,
     };
 
     return await handler.detect(node.actionId!, node.params, actionContext);
@@ -270,15 +276,21 @@ export class WorkflowRunService {
     if (!handler) {
       throw new Error(`Service "${node.serviceId}" not found`);
     }
+
     const workflow = this.repository.getWorkflow(context.workflowId);
+    const userId = workflow?.userId || 1;
+
+    const connection = await this.loadServiceConnection(userId, node.serviceId);
+
     const reactionContext: PluginReactionContext = {
       serviceId: node.serviceId,
       reactionId: node.reactionId!,
       params: node.params,
       previousOutput: context.previousOutput,
-      userId: workflow?.userId || 1,
+      userId,
       state: context.state,
       logger: this.logger,
+      connection,
     };
 
     return await handler.execute(
@@ -286,6 +298,38 @@ export class WorkflowRunService {
       node.params,
       reactionContext,
     );
+  }
+
+  private async loadServiceConnection(
+    userId: number,
+    serviceId: string,
+  ): Promise<PluginActionContext['connection']> {
+    try {
+      const connection = await this.serviceAuthService.getConnection(
+        userId,
+        serviceId,
+      );
+
+      if (!connection) {
+        return undefined;
+      }
+
+      const refreshedConnection =
+        await this.serviceAuthService.refreshOAuth2TokenIfNeeded(connection);
+
+      return {
+        accessToken: refreshedConnection.accessToken ?? undefined,
+        refreshToken: refreshedConnection.refreshToken ?? undefined,
+        expiresAt: refreshedConnection.expiresAt ?? undefined,
+        scopes: refreshedConnection.scopes,
+        metadata: refreshedConnection.metadata as Record<string, unknown>,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load connection for service ${serviceId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
   }
 
   private findFirstNode(nodes: Node[]): Node | undefined {

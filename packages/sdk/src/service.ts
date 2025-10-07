@@ -9,24 +9,30 @@ import type {
   ParameterSchema,
 } from "./types";
 
-function convertAuthToString(auth: ServiceDefinition["auth"]): string {
-  if (typeof auth === "string") {
-    return auth;
-  }
-
-  if (auth.type === "none") {
-    return "none";
-  }
-
+function normalizeAuthConfig(
+  auth: ServiceDefinition["auth"],
+): ServiceDefinition["auth"] {
   if (auth.type === "oauth2") {
-    return "oauth2";
+    return {
+      type: "oauth2",
+      authorizationUrl: auth.authorizationUrl,
+      tokenUrl: auth.tokenUrl,
+      scopes: [...auth.scopes],
+      clientIdEnvVar: auth.clientIdEnvVar,
+      clientSecretEnvVar: auth.clientSecretEnvVar,
+    };
   }
 
   if (auth.type === "api_key") {
-    return "api_key";
+    return {
+      type: "api_key",
+      keyName: auth.keyName,
+      keyLocation: auth.keyLocation,
+      description: auth.description,
+    };
   }
 
-  return "none";
+  return { type: "none" };
 }
 
 function convertParameterSchema(
@@ -101,7 +107,7 @@ export function createService(definition: ServiceDefinition): CreatedService {
         version: definition.version || "1.0.0",
         description: definition.description,
         logo: definition.logo,
-        auth: convertAuthToString(definition.auth),
+        auth: normalizeAuthConfig(definition.auth),
         actions: actions.map((action) => ({
           id: action.id,
           name: action.name,
