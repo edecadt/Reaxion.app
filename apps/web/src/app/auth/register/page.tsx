@@ -14,12 +14,7 @@ import {
 } from "../../../components/ui/card";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
-import { postJson } from "../../../lib/api";
-
-type AuthResponse = {
-  token: string;
-  user: { id: number; email: string; name?: string | null };
-};
+import { register } from "../../../lib/api";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -33,11 +28,7 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await postJson<AuthResponse>("/auth/register", {
-        name: name.trim() || undefined,
-        email,
-        password,
-      });
+      const data = await register(email, password, name.trim() || undefined);
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       window.location.href = "/";

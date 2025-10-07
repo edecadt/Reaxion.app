@@ -14,12 +14,7 @@ import {
 } from "../../../components/ui/card";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
-import { postJson } from "../../../lib/api";
-
-type AuthResponse = {
-  token: string;
-  user: { id: number; email: string; name?: string | null };
-};
+import { login } from "../../../lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -32,10 +27,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await postJson<AuthResponse>("/auth/login", {
-        email,
-        password,
-      });
+      const data = await login(email, password);
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       window.location.href = "/";

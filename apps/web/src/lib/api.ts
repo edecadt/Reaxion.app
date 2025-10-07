@@ -181,3 +181,26 @@ export async function getRunLogs(
     { token },
   );
 }
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<{
+  token: string;
+  user: { id: number; email: string; name?: string | null };
+}> {
+  return await request("POST", "/auth/login", { body: { email, password } });
+}
+
+export async function register(
+  email: string,
+  password: string,
+  name?: string,
+): Promise<{
+  token: string;
+  user: { id: number; email: string; name?: string | null };
+}> {
+  return await request("POST", "/auth/register", {
+    body: { email, password, name },
+  });
+}
