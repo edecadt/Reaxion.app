@@ -384,7 +384,7 @@ export default function CreateWorkflowWizard() {
   const progress = step / stepsMeta.length;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <View style={styles.root}>
         <ScrollView
           style={styles.scroll}
