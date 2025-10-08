@@ -253,10 +253,15 @@ export class WorkflowRunService {
 
     const connection = await this.loadServiceConnection(userId, node.serviceId);
 
+    const processedParams = this.substituteVariables(
+      node.params,
+      context.previousOutput,
+    );
+
     const actionContext: PluginActionContext = {
       serviceId: node.serviceId,
       actionId: node.actionId!,
-      params: node.params,
+      params: processedParams,
       userId,
       state: context.state,
       logger: this.logger,
@@ -265,7 +270,7 @@ export class WorkflowRunService {
       connection,
     };
 
-    return await handler.detect(node.actionId!, node.params, actionContext);
+    return await handler.detect(node.actionId!, processedParams, actionContext);
   }
 
   private async executeReaction(
@@ -282,10 +287,15 @@ export class WorkflowRunService {
 
     const connection = await this.loadServiceConnection(userId, node.serviceId);
 
+    const processedParams = this.substituteVariables(
+      node.params,
+      context.previousOutput,
+    );
+
     const reactionContext: PluginReactionContext = {
       serviceId: node.serviceId,
       reactionId: node.reactionId!,
-      params: node.params,
+      params: processedParams,
       previousOutput: context.previousOutput,
       userId,
       state: context.state,
@@ -295,7 +305,7 @@ export class WorkflowRunService {
 
     return await handler.execute(
       node.reactionId!,
-      node.params,
+      processedParams,
       reactionContext,
     );
   }
@@ -924,5 +934,48 @@ export class WorkflowRunService {
 
   private getGlobalState(): Record<string, Record<string, unknown>> {
     return this.globalState;
+  }
+
+  private substituteVariables(
+    params: Record<string, unknown>,
+    previousOutput?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (!previousOutput || Object.keys(previousOutput).length === 0) {
+      return params;
+    }
+
+    const substitute = (value: unknown): unknown => {
+      if (typeof value === 'string') {
+        return value.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
+          const trimmedVarName = varName.trim();
+          if (
+            previousOutput &&
+            Object.prototype.hasOwnProperty.call(previousOutput, trimmedVarName)
+          ) {
+            const replacement = previousOutput[trimmedVarName];
+            return replacement !== undefined && replacement !== null
+              ? String(replacement)
+              : match;
+          }
+          return match;
+        });
+      }
+
+      if (Array.isArray(value)) {
+        return value.map((item) => substitute(item));
+      }
+
+      if (value !== null && typeof value === 'object') {
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value)) {
+          result[key] = substitute(val);
+        }
+        return result;
+      }
+
+      return value;
+    };
+
+    return substitute(params) as Record<string, unknown>;
   }
 }
