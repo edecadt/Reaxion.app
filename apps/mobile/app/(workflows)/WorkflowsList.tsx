@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "expo-router";
 import type { Workflow } from "@reaxion/common";
 import {
@@ -21,28 +21,34 @@ import { useAuth } from "../../src/hooks/useAuth";
 
 export default function WorkflowsList() {
   const toast = useToast();
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function load(opts?: { silent?: boolean }) {
-    const silent = !!opts?.silent;
-    if (!silent) setLoading(true);
-    setError(null);
-    try {
-      const data = await getWorkflows(token ?? undefined);
-      setWorkflows(data);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Erreur inconnue";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = !!opts?.silent;
+      if (!token) {
+        return;
+      }
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const data = await getWorkflows(token);
+        setWorkflows(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erreur inconnue";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [token, toast],
+  );
 
   async function onRefresh() {
     setRefreshing(true);
@@ -85,8 +91,9 @@ export default function WorkflowsList() {
   }
 
   useEffect(() => {
+    if (authLoading || !token) return;
     void load();
-  }, []);
+  }, [authLoading, token, load]);
 
   return (
     <ScrollView
