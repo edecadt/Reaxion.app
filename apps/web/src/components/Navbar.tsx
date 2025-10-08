@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
+import { clearAuth } from "../lib/auth";
 import { cn } from "../lib/utils";
 
 type User = { id: number; email: string; name?: string | null };
@@ -17,8 +18,7 @@ export default function Navbar() {
   }, []);
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuth();
     setUser(null);
     window.location.href = "/auth/login";
   };
@@ -42,7 +42,7 @@ export default function Navbar() {
             Mes workflows
           </Link>
           <Link
-            href="/workflows/create"
+            href="/workflows/builder"
             className={cn(
               "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
             )}

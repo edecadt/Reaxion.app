@@ -66,3 +66,19 @@ body {
   font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
 }
+
+/* React Flow edge styles */
+.react-flow__edge-path {
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3;
+  stroke: #8b5cf6 !important;
+}
+
+.react-flow__edge.selected {
+  z-index: 1000;
+}

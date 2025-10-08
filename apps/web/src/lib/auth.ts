@@ -1,7 +1,7 @@
 export function setAuthToken(token: string) {
   localStorage.setItem("token", token);
 
-  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure=${window.location.protocol === "https:"}`;
 }
 
 export function setUser(user: {

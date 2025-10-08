@@ -160,6 +160,27 @@ export async function executeWorkflow(
   );
 }
 
+export async function updateWorkflow(
+  id: string,
+  dto: CreateWorkflowDto,
+  token?: string,
+): Promise<Workflow> {
+  return await request<Workflow>(
+    "PATCH",
+    `/workflows/${encodeURIComponent(id)}`,
+    { body: dto, token },
+  );
+}
+
+export async function deleteWorkflow(
+  id: string,
+  token?: string,
+): Promise<void> {
+  return await request<void>("DELETE", `/workflows/${encodeURIComponent(id)}`, {
+    token,
+  });
+}
+
 export async function getRun(
   runId: string,
   token?: string,
