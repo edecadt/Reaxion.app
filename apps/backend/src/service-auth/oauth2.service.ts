@@ -14,6 +14,8 @@ export interface OAuth2Config {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  authorizationParams?: Record<string, string>;
+  tokenParams?: Record<string, string>;
 }
 
 export interface OAuth2TokenResponse {
@@ -43,20 +45,27 @@ export class OAuth2Service {
   ): string {
     const state = this.generateState(userId, serviceId);
 
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: config.redirectUri,
-      response_type: 'code',
-      scope: config.scopes.join(' '),
-      state,
-    });
+    const url = new URL(config.authorizationUrl);
+    const params = new URLSearchParams(url.search);
 
-    const url = `${config.authorizationUrl}?${params.toString()}`;
+    params.set('client_id', config.clientId);
+    params.set('redirect_uri', config.redirectUri);
+    params.set('response_type', 'code');
+    params.set('scope', config.scopes.join(' '));
+    params.set('state', state);
+
+    if (config.authorizationParams) {
+      for (const [key, value] of Object.entries(config.authorizationParams)) {
+        params.set(key, value);
+      }
+    }
+
+    url.search = params.toString();
     this.logger.log(
       `Generated authorization URL for user ${userId}, service ${serviceId}`,
     );
 
-    return url;
+    return url.toString();
   }
 
   validateState(state: string): { userId: number; serviceId: string } {
@@ -86,6 +95,12 @@ export class OAuth2Service {
       client_id: config.clientId,
       client_secret: config.clientSecret,
     });
+
+    if (config.tokenParams) {
+      for (const [key, value] of Object.entries(config.tokenParams)) {
+        params.set(key, value);
+      }
+    }
 
     try {
       const response = await fetch(config.tokenUrl, {
@@ -139,6 +154,12 @@ export class OAuth2Service {
       client_id: config.clientId,
       client_secret: config.clientSecret,
     });
+
+    if (config.tokenParams) {
+      for (const [key, value] of Object.entries(config.tokenParams)) {
+        params.set(key, value);
+      }
+    }
 
     try {
       const response = await fetch(config.tokenUrl, {

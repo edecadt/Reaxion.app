@@ -144,6 +144,8 @@ export type OAuth2AuthConfig = {
   scopes: string[];
   clientIdEnvVar: string;
   clientSecretEnvVar: string;
+  authorizationParams?: Record<string, string>;
+  tokenParams?: Record<string, string>;
 };
 
 export type ApiKeyAuthConfig = {

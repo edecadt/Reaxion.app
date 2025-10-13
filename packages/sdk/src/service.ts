@@ -20,6 +20,10 @@ function normalizeAuthConfig(
       scopes: [...auth.scopes],
       clientIdEnvVar: auth.clientIdEnvVar,
       clientSecretEnvVar: auth.clientSecretEnvVar,
+      authorizationParams: auth.authorizationParams
+        ? { ...auth.authorizationParams }
+        : undefined,
+      tokenParams: auth.tokenParams ? { ...auth.tokenParams } : undefined,
     };
   }
 

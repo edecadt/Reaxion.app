@@ -82,6 +82,8 @@ export type AboutServiceAuth =
       scopes: string[];
       clientIdEnvVar: string;
       clientSecretEnvVar: string;
+      authorizationParams?: Record<string, string>;
+      tokenParams?: Record<string, string>;
     }
   | {
       type: "api_key";
@@ -285,5 +287,6 @@ export async function disconnectService(
 }
 
 export function getOAuth2ConnectUrl(serviceId: string): string {
-  return `${API_URL}/api/service-auth/connect/${encodeURIComponent(serviceId)}`;
+  const base = API_URL.replace(/\/+$/, "");
+  return `${base}/api/service-auth/connect/${encodeURIComponent(serviceId)}`;
 }

@@ -116,7 +116,7 @@ export class ServiceAuthController {
       const errorMessage =
         query.error_description || query.error || 'Unknown error';
       return res.redirect(
-        `${this.getFrontendUrl()}/settings/connections?error=${encodeURIComponent(errorMessage)}`,
+        `${this.getFrontendUrl()}/settings?error=${encodeURIComponent(errorMessage)}`,
       );
     }
 
@@ -182,7 +182,7 @@ export class ServiceAuthController {
     }
 
     return res.redirect(
-      `${this.getFrontendUrl()}/settings/connections?success=true&service=${serviceId}`,
+      `${this.getFrontendUrl()}/settings?success=true&service=${serviceId}`,
     );
   }
 

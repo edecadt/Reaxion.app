@@ -83,6 +83,31 @@ const ensureStringArray = (value: unknown, field: string): string[] => {
   );
 };
 
+const ensureStringRecord = (
+  value: unknown,
+  field: string,
+): Record<string, string> | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ManifestValidationError(`${field} must be an object`);
+  }
+
+  const entries = Object.entries(value);
+  const record: Record<string, string> = {};
+
+  for (const [key, entryValue] of entries) {
+    record[ensureNonEmptyString(key, `${field} key`)] = ensureNonEmptyString(
+      entryValue,
+      `${field}[${key}]`,
+    );
+  }
+
+  return record;
+};
+
 const parseAuthConfig = (value: unknown, serviceId: string): AuthConfig => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new ManifestValidationError('auth must be an object');
@@ -139,6 +164,11 @@ const parseAuthConfig = (value: unknown, serviceId: string): AuthConfig => {
           auth.clientSecretEnvVar,
           'auth.clientSecretEnvVar',
         ),
+        authorizationParams: ensureStringRecord(
+          auth.authorizationParams,
+          'auth.authorizationParams',
+        ),
+        tokenParams: ensureStringRecord(auth.tokenParams, 'auth.tokenParams'),
       };
     }
     default:
