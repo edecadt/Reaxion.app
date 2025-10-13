@@ -36,6 +36,7 @@ type WorkflowCanvasProps = {
   onNodesChange?: (nodes: Node[]) => void;
   onEdgesChange?: (edges: Edge[]) => void;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
+  onNodeDoubleClick?: (event: React.MouseEvent, node: Node) => void;
   onNodesDelete?: (nodes: Node[]) => void;
   onDeleteNode?: (nodeId: string) => void;
   onInit?: (instance: any) => void;
@@ -49,6 +50,7 @@ export function WorkflowCanvas({
   onNodesChange,
   onEdgesChange,
   onNodeClick,
+  onNodeDoubleClick,
   onNodesDelete,
   onDeleteNode,
   onInit,
@@ -65,13 +67,6 @@ export function WorkflowCanvas({
     const prevLength = prevNodesLengthRef.current;
 
     if (currentLength > prevLength) {
-      console.log(
-        "WorkflowCanvas: initialNodes increased from",
-        prevLength,
-        "to",
-        currentLength,
-        "syncing...",
-      );
       prevNodesLengthRef.current = currentLength;
       setNodes(
         initialNodes.map((node) => ({
@@ -80,13 +75,6 @@ export function WorkflowCanvas({
         })),
       );
     } else if (currentLength < prevLength) {
-      console.log(
-        "WorkflowCanvas: initialNodes decreased from",
-        prevLength,
-        "to",
-        currentLength,
-        "NOT syncing (deletion)",
-      );
       prevNodesLengthRef.current = currentLength;
     }
   }, [initialNodes.length, onDeleteNode]);
@@ -96,29 +84,14 @@ export function WorkflowCanvas({
     const prevLength = prevEdgesLengthRef.current;
 
     if (currentLength > prevLength) {
-      console.log(
-        "WorkflowCanvas: initialEdges increased from",
-        prevLength,
-        "to",
-        currentLength,
-        "syncing...",
-      );
       prevEdgesLengthRef.current = currentLength;
       setEdges(initialEdges);
     } else if (currentLength < prevLength) {
-      console.log(
-        "WorkflowCanvas: initialEdges decreased from",
-        prevLength,
-        "to",
-        currentLength,
-        "NOT syncing (deletion)",
-      );
       prevEdgesLengthRef.current = currentLength;
     }
   }, [initialEdges.length]);
 
   useEffect(() => {
-    console.log("WorkflowCanvas: onDeleteNode changed, injecting into nodes");
     setNodes((currentNodes) =>
       currentNodes.map((node) => ({
         ...node,
@@ -136,7 +109,6 @@ export function WorkflowCanvas({
 
   const handleEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
-      console.log("handleEdgesChange: changes=", changes);
       onEdgesChangeInternal(changes);
     },
     [onEdgesChangeInternal],
@@ -150,7 +122,6 @@ export function WorkflowCanvas({
 
   useEffect(() => {
     if (onEdgesChange) {
-      console.log("WorkflowCanvas: Edges changed, notifying parent:", edges);
       onEdgesChange(edges);
     }
   }, [edges, onEdgesChange]);
@@ -223,13 +194,10 @@ export function WorkflowCanvas({
     [onNodesDelete],
   );
 
-  const handleEdgesDelete = useCallback((deleted: Edge[]) => {
-    console.log("Edges deleted:", deleted);
-  }, []);
+  const handleEdgesDelete = useCallback((deleted: Edge[]) => {}, []);
 
   const onReconnect = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
-      console.log("Reconnecting edge:", oldEdge, "to:", newConnection);
       setEdges((eds) => {
         const filtered = eds.filter((e) => e.id !== oldEdge.id);
         const newEdge = {
@@ -260,6 +228,7 @@ export function WorkflowCanvas({
         onConnect={onConnect}
         onReconnect={onReconnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onNodesDelete={handleNodesDelete}
         onEdgesDelete={handleEdgesDelete}
         onDrop={onDrop}

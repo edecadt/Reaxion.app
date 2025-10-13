@@ -9,12 +9,6 @@ export const ReactionNode = memo(({ data, selected, id }: NodeProps) => {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log(
-      "Delete clicked on ReactionNode, onDeleteNode:",
-      onDeleteNode,
-      "id:",
-      id,
-    );
     if (onDeleteNode) {
       onDeleteNode(id);
     } else {
@@ -32,7 +26,6 @@ export const ReactionNode = memo(({ data, selected, id }: NodeProps) => {
             : "border-gray-300 hover:border-gray-400"
       }`}
     >
-      {/* Delete Button */}
       <button
         onClick={handleDelete}
         className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600 flex items-center justify-center z-10"

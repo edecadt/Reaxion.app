@@ -67,7 +67,6 @@ body {
     "Segoe UI", sans-serif;
 }
 
-/* React Flow edge styles */
 .react-flow__edge-path {
   stroke-width: 2;
   cursor: pointer;

@@ -7,6 +7,7 @@ import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { WorkflowCanvas } from "../../../components/workflow-builder/WorkflowCanvas";
+import { MobileWorkflowBuilder } from "../../../components/workflow-builder/MobileWorkflowBuilder";
 import { getAuthToken } from "../../../lib/auth";
 import {
   createWorkflow,
@@ -34,10 +35,90 @@ export default function WorkflowBuilderPage() {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const reactFlowInstanceRef = useRef<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     setToken(getAuthToken());
   }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const sortNodesByEdges = useCallback(
+    (nodesList: Node[], edgesList: Edge[]): Node[] => {
+      if (nodesList.length === 0) return [];
+      if (edgesList.length === 0) return nodesList;
+
+      const outgoingEdges = new Map<string, string[]>();
+      const incomingCount = new Map<string, number>();
+
+      nodesList.forEach((node) => {
+        outgoingEdges.set(node.id, []);
+        incomingCount.set(node.id, 0);
+      });
+
+      edgesList.forEach((edge) => {
+        if (outgoingEdges.has(edge.source)) {
+          outgoingEdges.get(edge.source)!.push(edge.target);
+        }
+        incomingCount.set(
+          edge.target,
+          (incomingCount.get(edge.target) || 0) + 1,
+        );
+      });
+
+      const startNodes = nodesList.filter(
+        (node) => incomingCount.get(node.id) === 0,
+      );
+      if (startNodes.length === 0) {
+        return nodesList;
+      }
+
+      const sorted: Node[] = [];
+      const queue = [...startNodes];
+      const visited = new Set<string>();
+
+      while (queue.length > 0) {
+        const currentNode = queue.shift()!;
+        if (visited.has(currentNode.id)) continue;
+
+        visited.add(currentNode.id);
+        sorted.push(currentNode);
+
+        const targets = outgoingEdges.get(currentNode.id) || [];
+        targets.forEach((targetId) => {
+          const targetNode = nodesList.find((n) => n.id === targetId);
+          if (targetNode && !visited.has(targetId)) {
+            queue.push(targetNode);
+          }
+        });
+      }
+
+      nodesList.forEach((node) => {
+        if (!visited.has(node.id)) {
+          sorted.push(node);
+        }
+      });
+
+      return sorted;
+    },
+    [],
+  );
+
+  const getSortedNodesForMobile = useCallback(() => {
+    if (edges.length > 0 && nodes.length > 0) {
+      return sortNodesByEdges(nodes, edges);
+    }
+    return nodes;
+  }, [nodes, edges, sortNodesByEdges]);
 
   useEffect(() => {
     if (token) {
@@ -60,13 +141,10 @@ export default function WorkflowBuilderPage() {
 
   const loadWorkflow = async (id: string) => {
     if (!token) {
-      console.log("loadWorkflow: No token, skipping");
       return;
     }
     try {
-      console.log("loadWorkflow: Loading workflow with id:", id);
       const workflows = await getWorkflows(token);
-      console.log("loadWorkflow: Got workflows:", workflows);
       const workflow = workflows.find((w) => w.id === id);
 
       if (!workflow) {
@@ -76,22 +154,12 @@ export default function WorkflowBuilderPage() {
         return;
       }
 
-      console.log("loadWorkflow: Found workflow:", workflow);
       setWorkflowName(workflow.name);
       setIsEditing(true);
 
       const flowNodes: Node[] = (workflow.nodes || []).map((node, index) => {
         const isAction = node.actionId && node.actionId.trim() !== "";
         const isReaction = node.reactionId && node.reactionId.trim() !== "";
-
-        console.log(
-          "loadWorkflow: Converting node:",
-          node,
-          "isAction:",
-          isAction,
-          "isReaction:",
-          isReaction,
-        );
 
         return {
           id: node.id,
@@ -123,8 +191,6 @@ export default function WorkflowBuilderPage() {
         });
       });
 
-      console.log("loadWorkflow: Setting nodes:", flowNodes);
-      console.log("loadWorkflow: Setting edges:", flowEdges);
       setNodes(flowNodes);
       setEdges(flowEdges);
     } catch (err) {
@@ -136,9 +202,21 @@ export default function WorkflowBuilderPage() {
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       setSelectedNode(node);
-      setConfigModalOpen(true);
+      if (isMobile) {
+        setConfigModalOpen(true);
+      }
     },
-    [],
+    [isMobile],
+  );
+
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      setSelectedNode(node);
+      if (!isMobile) {
+        setConfigModalOpen(true);
+      }
+    },
+    [isMobile],
   );
 
   const updateSelectedNode = useCallback(
@@ -155,8 +233,6 @@ export default function WorkflowBuilderPage() {
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
-      console.log("onDeleteNode called with nodeId:", nodeId);
-
       if (!reactFlowInstanceRef.current) {
         console.error("React Flow instance not available!");
         return;
@@ -166,21 +242,11 @@ export default function WorkflowBuilderPage() {
       const currentNodes = rfInstance.getNodes();
       const currentEdges = rfInstance.getEdges();
 
-      console.log(
-        "Current nodes before delete:",
-        currentNodes.map((n: Node) => n.id),
-      );
       const filteredNodes = currentNodes.filter((n: Node) => n.id !== nodeId);
-      console.log(
-        "Nodes after delete:",
-        filteredNodes.map((n: Node) => n.id),
-      );
 
-      console.log("Current edges before delete:", currentEdges.length);
       const filteredEdges = currentEdges.filter(
         (e: Edge) => e.source !== nodeId && e.target !== nodeId,
       );
-      console.log("Edges after delete:", filteredEdges.length);
 
       rfInstance.setNodes(filteredNodes);
       rfInstance.setEdges(filteredEdges);
@@ -255,9 +321,6 @@ export default function WorkflowBuilderPage() {
       const currentNodes = rfInstance ? rfInstance.getNodes() : nodes;
       const currentEdges = rfInstance ? rfInstance.getEdges() : edges;
 
-      console.log("handleSave: Saving nodes:", currentNodes);
-      console.log("handleSave: Saving edges:", currentEdges);
-
       const workflowNodes = currentNodes.map((node) => {
         const customLabel =
           node.data.label &&
@@ -266,10 +329,6 @@ export default function WorkflowBuilderPage() {
           node.data.label !== "New Action"
             ? node.data.label
             : undefined;
-
-        console.log(
-          `Node ${node.id}: data.label="${node.data.label}", customLabel="${customLabel}"`,
-        );
 
         return {
           id: node.id,
@@ -312,26 +371,294 @@ export default function WorkflowBuilderPage() {
     }
   };
 
+  const createEdgesFromNodes = useCallback((nodesList: Node[]): Edge[] => {
+    const newEdges: Edge[] = [];
+    for (let i = 0; i < nodesList.length - 1; i++) {
+      newEdges.push({
+        id: `${nodesList[i].id}-${nodesList[i + 1].id}`,
+        source: nodesList[i].id,
+        target: nodesList[i + 1].id,
+        type: "smoothstep",
+        animated: true,
+      });
+    }
+    return newEdges;
+  }, []);
+
+  const handleMobileAddNode = useCallback(
+    (type: "action" | "reaction") => {
+      const newNode: Node = {
+        id: `node-${Date.now()}`,
+        type,
+        position: { x: 0, y: 0 },
+        data: {
+          label: type === "action" ? "New Trigger" : "New Action",
+          serviceId: "",
+          ...(type === "action" ? { actionId: "" } : { reactionId: "" }),
+          params: {},
+        },
+      };
+      const newNodes = [...nodes, newNode];
+      setNodes(newNodes);
+      setEdges(createEdgesFromNodes(newNodes));
+    },
+    [nodes, createEdgesFromNodes],
+  );
+
+  const handleMobileUpdateNode = useCallback(
+    (nodeId: string, updates: Partial<Node["data"]>) => {
+      setNodes(
+        nodes.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, ...updates } }
+            : node,
+        ),
+      );
+    },
+    [nodes],
+  );
+
+  const handleMobileDeleteNode = useCallback(
+    (nodeId: string) => {
+      const filteredNodes = nodes.filter((n) => n.id !== nodeId);
+      setNodes(filteredNodes);
+      setEdges(createEdgesFromNodes(filteredNodes));
+    },
+    [nodes, createEdgesFromNodes],
+  );
+
+  const handleMobileNodesChange = useCallback(
+    (newNodes: Node[]) => {
+      setNodes(newNodes);
+      setEdges(createEdgesFromNodes(newNodes));
+    },
+    [createEdgesFromNodes],
+  );
+
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-gray-50">
-      {/* Retractable Sidebar */}
-      <div
-        className={`bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "w-80" : "w-0"
-        } overflow-hidden z-10`}
-      >
-        <div
-          className="h-full overflow-y-auto p-6 space-y-4"
-          style={{ width: "320px" }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Workflow Builder</h2>
+    <div className="fixed inset-0 flex flex-col md:flex-row overflow-hidden bg-gray-50">
+      {isMobile ? (
+        <div className="flex flex-col h-full">
+          <div className="bg-white border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/workflows")}
+              >
+                ← Back
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={!workflowName.trim() || nodes.length === 0}
+                size="sm"
+              >
+                Save
+              </Button>
+            </div>
+            <Input
+              value={workflowName}
+              onChange={(e) => setWorkflowName(e.target.value)}
+              placeholder="Workflow name"
+              className="text-lg font-semibold"
+            />
+          </div>
+
+          <MobileWorkflowBuilder
+            nodes={getSortedNodesForMobile()}
+            services={services}
+            onNodesChange={handleMobileNodesChange}
+            onAddNode={handleMobileAddNode}
+            onDeleteNode={handleMobileDeleteNode}
+            onUpdateNode={handleMobileUpdateNode}
+          />
+
+          {success && (
+            <div className="absolute top-20 left-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
+              Workflow saved successfully!
+            </div>
+          )}
+          {error && (
+            <div className="absolute top-20 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg">
+              {error}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div
+            className={`bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${
+              sidebarOpen ? "w-80" : "w-0"
+            } overflow-hidden z-10`}
+          >
+            <div
+              className="h-full overflow-y-auto p-6 space-y-4"
+              style={{ width: "320px" }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Workflow Builder</h2>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-sm font-medium">
+                  Workflow Name
+                </Label>
+                <Input
+                  id="name"
+                  value={workflowName}
+                  onChange={(e) => setWorkflowName(e.target.value)}
+                  placeholder="My Workflow"
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Drag Nodes
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Drag and drop nodes onto the canvas
+                </p>
+
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/reactflow", "action");
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-lg border-2 border-violet-500 bg-gradient-to-br from-violet-50 to-purple-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <svg
+                      className="w-4 h-4 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">
+                      Trigger Node
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Starts the workflow
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/reactflow", "reaction");
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                    <svg
+                      className="w-4 h-4 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">
+                      Action Node
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Performs an action
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Available Services
+                </h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {services.length === 0 ? (
+                    <div className="text-sm text-gray-400 italic">
+                      Loading services...
+                    </div>
+                  ) : (
+                    services.map((service) => (
+                      <div
+                        key={service.name}
+                        className="text-sm p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+                      >
+                        <div className="font-medium text-gray-900">
+                          {service.name}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {service.actions.length} triggers •{" "}
+                          {service.reactions.length} actions
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <Button
+                  onClick={handleSave}
+                  disabled={!workflowName.trim()}
+                  className="w-full"
+                >
+                  Save Workflow
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {!sidebarOpen && (
             <button
-              onClick={() => setSidebarOpen(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => setSidebarOpen(true)}
+              className="fixed left-4 top-24 z-20 bg-white rounded-lg p-3 shadow-lg hover:shadow-xl transition-all border border-gray-200"
+              title="Open sidebar"
             >
               <svg
-                className="w-5 h-5"
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -340,481 +667,328 @@ export default function WorkflowBuilderPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
+                  d="M4 6h16M4 12h16M4 18h16"
                 />
               </svg>
             </button>
-          </div>
+          )}
 
-          {/* Workflow Settings */}
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium">
-              Workflow Name
-            </Label>
-            <Input
-              id="name"
-              value={workflowName}
-              onChange={(e) => setWorkflowName(e.target.value)}
-              placeholder="My Workflow"
-              className="w-full"
-            />
-          </div>
-
-          {/* Drag Nodes Section */}
-          <div className="space-y-3 pt-4">
-            <h3 className="text-sm font-semibold text-gray-700">Drag Nodes</h3>
-            <p className="text-xs text-gray-500">
-              Drag and drop nodes onto the canvas
-            </p>
-
-            <div
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("application/reactflow", "action");
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              className="flex items-center gap-3 p-3 rounded-lg border-2 border-violet-500 bg-gradient-to-br from-violet-50 to-purple-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
-            >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                <svg
-                  className="w-4 h-4 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <div className="flex-1 relative">
+            <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">
+                    {workflowName || "Untitled Workflow"}
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Drag nodes from the sidebar and connect them to build your
+                    workflow
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/workflows")}
+                  className="bg-white"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <div className="text-sm font-bold text-gray-900">
-                  Trigger Node
-                </div>
-                <div className="text-xs text-gray-500">Starts the workflow</div>
+                  Back to Workflows
+                </Button>
               </div>
             </div>
 
-            <div
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("application/reactflow", "reaction");
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              className="flex items-center gap-3 p-3 rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
-            >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-                <svg
-                  className="w-4 h-4 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <div className="text-sm font-bold text-gray-900">
-                  Action Node
-                </div>
-                <div className="text-xs text-gray-500">Performs an action</div>
-              </div>
+            <div className="absolute top-[88px] left-0 right-0 bottom-0">
+              <WorkflowCanvas
+                initialNodes={nodes}
+                initialEdges={edges}
+                onNodesChange={setNodes}
+                onEdgesChange={setEdges}
+                onNodeClick={handleNodeClick}
+                onNodeDoubleClick={handleNodeDoubleClick}
+                onInit={(instance) => {
+                  reactFlowInstanceRef.current = instance;
+                }}
+                onDeleteNode={onDeleteNode}
+              />
             </div>
           </div>
 
-          {/* Available Services */}
-          <div className="space-y-3 pt-4">
-            <h3 className="text-sm font-semibold text-gray-700">
-              Available Services
-            </h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {services.length === 0 ? (
-                <div className="text-sm text-gray-400 italic">
-                  Loading services...
-                </div>
-              ) : (
-                services.map((service) => (
-                  <div
-                    key={service.name}
-                    className="text-sm p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
-                  >
-                    <div className="font-medium text-gray-900">
-                      {service.name}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {service.actions.length} triggers •{" "}
-                      {service.reactions.length} actions
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Save Button */}
-          <div className="pt-4 border-t border-gray-200">
-            <Button
-              onClick={handleSave}
-              disabled={!workflowName.trim()}
-              className="w-full"
-            >
-              Save Workflow
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Toggle Sidebar Button */}
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="fixed left-4 top-24 z-20 bg-white rounded-lg p-3 shadow-lg hover:shadow-xl transition-all border border-gray-200"
-          title="Open sidebar"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
-      )}
-
-      {/* Main Canvas Area */}
-      <div className="flex-1 relative">
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                {workflowName || "Untitled Workflow"}
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Drag nodes from the sidebar and connect them to build your
-                workflow
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => router.push("/workflows")}
-              className="bg-white"
-            >
-              Back to Workflows
-            </Button>
-          </div>
-        </div>
-
-        {/* Canvas */}
-        <div className="absolute top-[88px] left-0 right-0 bottom-0">
-          <WorkflowCanvas
-            initialNodes={nodes}
-            initialEdges={edges}
-            onNodesChange={setNodes}
-            onEdgesChange={setEdges}
-            onNodeClick={handleNodeClick}
-            onInit={(instance) => {
-              reactFlowInstanceRef.current = instance;
+          <Dialog
+            open={configModalOpen}
+            onClose={() => {
+              setConfigModalOpen(false);
+              setSelectedNode(null);
             }}
-            onDeleteNode={onDeleteNode}
-          />
-        </div>
-      </div>
+            title="Node Configuration"
+          >
+            {selectedNode && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="node-label" className="text-sm font-medium">
+                      Label
+                    </Label>
+                    <Input
+                      id="node-label"
+                      value={
+                        selectedNode.data.label &&
+                        selectedNode.data.label !== selectedNode.id &&
+                        selectedNode.data.label !== "New Trigger" &&
+                        selectedNode.data.label !== "New Action"
+                          ? selectedNode.data.label
+                          : ""
+                      }
+                      onChange={(e) =>
+                        updateSelectedNode({
+                          label: e.target.value || undefined,
+                        })
+                      }
+                      placeholder="Custom label (optional)"
+                    />
+                  </div>
 
-      {/* Node Configuration Modal */}
-      <Dialog
-        open={configModalOpen}
-        onClose={() => {
-          setConfigModalOpen(false);
-          setSelectedNode(null);
-        }}
-        title="Node Configuration"
-      >
-        {selectedNode && (
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="node-label" className="text-sm font-medium">
-                  Label
-                </Label>
-                <Input
-                  id="node-label"
-                  value={
-                    selectedNode.data.label &&
-                    selectedNode.data.label !== selectedNode.id &&
-                    selectedNode.data.label !== "New Trigger" &&
-                    selectedNode.data.label !== "New Action"
-                      ? selectedNode.data.label
-                      : ""
-                  }
-                  onChange={(e) =>
-                    updateSelectedNode({ label: e.target.value || undefined })
-                  }
-                  placeholder="Custom label (optional)"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="node-service" className="text-sm font-medium">
-                  Service
-                </Label>
-                <select
-                  id="node-service"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedNode.data.serviceId || ""}
-                  onChange={(e) => {
-                    updateSelectedNode({
-                      serviceId: e.target.value,
-                      actionId: undefined,
-                      reactionId: undefined,
-                      params: {},
-                    });
-                  }}
-                >
-                  <option value="">Select service</option>
-                  {services.map((service) => (
-                    <option key={service.name} value={service.name}>
-                      {service.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedNode.type === "action" &&
-                selectedNode.data.serviceId && (
                   <div className="space-y-2">
                     <Label
-                      htmlFor="node-action"
+                      htmlFor="node-service"
                       className="text-sm font-medium"
                     >
-                      Action
+                      Service
                     </Label>
                     <select
-                      id="node-action"
+                      id="node-service"
                       className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={selectedNode.data.actionId || ""}
+                      value={selectedNode.data.serviceId || ""}
                       onChange={(e) => {
                         updateSelectedNode({
-                          actionId: e.target.value,
+                          serviceId: e.target.value,
+                          actionId: undefined,
+                          reactionId: undefined,
                           params: {},
                         });
                       }}
                     >
-                      <option value="">Select action</option>
-                      {services
-                        .find((s) => s.name === selectedNode.data.serviceId)
-                        ?.actions.map((action) => (
-                          <option key={action.name} value={action.name}>
-                            {action.name}
-                          </option>
-                        ))}
+                      <option value="">Select service</option>
+                      {services.map((service) => (
+                        <option key={service.name} value={service.name}>
+                          {service.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                )}
 
-              {selectedNode.type === "reaction" &&
-                selectedNode.data.serviceId && (
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="node-reaction"
-                      className="text-sm font-medium"
-                    >
-                      Reaction
-                    </Label>
-                    <select
-                      id="node-reaction"
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={selectedNode.data.reactionId || ""}
-                      onChange={(e) => {
-                        updateSelectedNode({
-                          reactionId: e.target.value,
-                          params: {},
-                        });
-                      }}
-                    >
-                      <option value="">Select reaction</option>
-                      {services
-                        .find((s) => s.name === selectedNode.data.serviceId)
-                        ?.reactions.map((reaction) => (
-                          <option key={reaction.name} value={reaction.name}>
-                            {reaction.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+                  {selectedNode.type === "action" &&
+                    selectedNode.data.serviceId && (
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="node-action"
+                          className="text-sm font-medium"
+                        >
+                          Action
+                        </Label>
+                        <select
+                          id="node-action"
+                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={selectedNode.data.actionId || ""}
+                          onChange={(e) => {
+                            updateSelectedNode({
+                              actionId: e.target.value,
+                              params: {},
+                            });
+                          }}
+                        >
+                          <option value="">Select action</option>
+                          {services
+                            .find((s) => s.name === selectedNode.data.serviceId)
+                            ?.actions.map((action) => (
+                              <option key={action.name} value={action.name}>
+                                {action.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
 
-              {/* Parameters Section */}
-              {(() => {
-                const service = services.find(
-                  (s) => s.name === selectedNode.data.serviceId,
-                );
-                const actionOrReaction =
-                  selectedNode.type === "action"
-                    ? service?.actions.find(
-                        (a) => a.name === selectedNode.data.actionId,
-                      )
-                    : service?.reactions.find(
-                        (r) => r.name === selectedNode.data.reactionId,
+                  {selectedNode.type === "reaction" &&
+                    selectedNode.data.serviceId && (
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="node-reaction"
+                          className="text-sm font-medium"
+                        >
+                          Reaction
+                        </Label>
+                        <select
+                          id="node-reaction"
+                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={selectedNode.data.reactionId || ""}
+                          onChange={(e) => {
+                            updateSelectedNode({
+                              reactionId: e.target.value,
+                              params: {},
+                            });
+                          }}
+                        >
+                          <option value="">Select reaction</option>
+                          {services
+                            .find((s) => s.name === selectedNode.data.serviceId)
+                            ?.reactions.map((reaction) => (
+                              <option key={reaction.name} value={reaction.name}>
+                                {reaction.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+
+                  {(() => {
+                    const service = services.find(
+                      (s) => s.name === selectedNode.data.serviceId,
+                    );
+                    const actionOrReaction =
+                      selectedNode.type === "action"
+                        ? service?.actions.find(
+                            (a) => a.name === selectedNode.data.actionId,
+                          )
+                        : service?.reactions.find(
+                            (r) => r.name === selectedNode.data.reactionId,
+                          );
+
+                    const inputDefinition = (actionOrReaction?.input ||
+                      {}) as Record<string, string>;
+                    const inputKeys = Object.keys(inputDefinition);
+
+                    if (inputKeys.length > 0) {
+                      return (
+                        <div className="space-y-3 pt-3 border-t border-gray-200">
+                          <h4 className="text-sm font-semibold text-gray-700">
+                            Parameters
+                          </h4>
+                          {inputKeys.map((key) => {
+                            const type = (
+                              inputDefinition[key] || "string"
+                            ).toLowerCase();
+                            const params = (selectedNode.data.params ||
+                              {}) as Record<string, unknown>;
+                            const value = params[key];
+
+                            if (type === "boolean") {
+                              return (
+                                <div
+                                  key={key}
+                                  className="flex items-center justify-between py-2"
+                                >
+                                  <Label
+                                    htmlFor={`param-${key}`}
+                                    className="text-sm font-medium"
+                                  >
+                                    {key}
+                                  </Label>
+                                  <input
+                                    id={`param-${key}`}
+                                    type="checkbox"
+                                    checked={Boolean(value)}
+                                    onChange={(e) => {
+                                      const newParams = {
+                                        ...params,
+                                        [key]: e.target.checked,
+                                      };
+                                      updateSelectedNode({ params: newParams });
+                                    }}
+                                    className="h-4 w-4"
+                                  />
+                                </div>
+                              );
+                            }
+
+                            if (type === "number") {
+                              return (
+                                <div key={key} className="space-y-1">
+                                  <Label
+                                    htmlFor={`param-${key}`}
+                                    className="text-sm font-medium"
+                                  >
+                                    {key}
+                                  </Label>
+                                  <Input
+                                    id={`param-${key}`}
+                                    type="number"
+                                    value={String(value ?? "")}
+                                    onChange={(e) => {
+                                      const newParams = {
+                                        ...params,
+                                        [key]: e.target.value,
+                                      };
+                                      updateSelectedNode({ params: newParams });
+                                    }}
+                                    placeholder={`Enter ${key}`}
+                                  />
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div key={key} className="space-y-1">
+                                <Label
+                                  htmlFor={`param-${key}`}
+                                  className="text-sm font-medium"
+                                >
+                                  {key}
+                                </Label>
+                                <Input
+                                  id={`param-${key}`}
+                                  value={String(value ?? "")}
+                                  onChange={(e) => {
+                                    const newParams = {
+                                      ...params,
+                                      [key]: e.target.value,
+                                    };
+                                    updateSelectedNode({ params: newParams });
+                                  }}
+                                  placeholder={`Enter ${key}`}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
                       );
+                    }
+                    return null;
+                  })()}
+                </div>
 
-                const inputDefinition = (actionOrReaction?.input ||
-                  {}) as Record<string, string>;
-                const inputKeys = Object.keys(inputDefinition);
+                <div className="flex gap-3 pt-4 border-t border-gray-200 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setConfigModalOpen(false);
+                      setSelectedNode(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      applyNodeChanges();
+                      setConfigModalOpen(false);
+                      setSelectedNode(null);
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Dialog>
 
-                if (inputKeys.length > 0) {
-                  return (
-                    <div className="space-y-3 pt-3 border-t border-gray-200">
-                      <h4 className="text-sm font-semibold text-gray-700">
-                        Parameters
-                      </h4>
-                      {inputKeys.map((key) => {
-                        const type = (
-                          inputDefinition[key] || "string"
-                        ).toLowerCase();
-                        const params = (selectedNode.data.params ||
-                          {}) as Record<string, unknown>;
-                        const value = params[key];
-
-                        if (type === "boolean") {
-                          return (
-                            <div
-                              key={key}
-                              className="flex items-center justify-between py-2"
-                            >
-                              <Label
-                                htmlFor={`param-${key}`}
-                                className="text-sm font-medium"
-                              >
-                                {key}
-                              </Label>
-                              <input
-                                id={`param-${key}`}
-                                type="checkbox"
-                                checked={Boolean(value)}
-                                onChange={(e) => {
-                                  const newParams = {
-                                    ...params,
-                                    [key]: e.target.checked,
-                                  };
-                                  updateSelectedNode({ params: newParams });
-                                }}
-                                className="h-4 w-4"
-                              />
-                            </div>
-                          );
-                        }
-
-                        if (type === "number") {
-                          return (
-                            <div key={key} className="space-y-1">
-                              <Label
-                                htmlFor={`param-${key}`}
-                                className="text-sm font-medium"
-                              >
-                                {key}
-                              </Label>
-                              <Input
-                                id={`param-${key}`}
-                                type="number"
-                                value={String(value ?? "")}
-                                onChange={(e) => {
-                                  const newParams = {
-                                    ...params,
-                                    [key]: e.target.value,
-                                  };
-                                  updateSelectedNode({ params: newParams });
-                                }}
-                                placeholder={`Enter ${key}`}
-                              />
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div key={key} className="space-y-1">
-                            <Label
-                              htmlFor={`param-${key}`}
-                              className="text-sm font-medium"
-                            >
-                              {key}
-                            </Label>
-                            <Input
-                              id={`param-${key}`}
-                              value={String(value ?? "")}
-                              onChange={(e) => {
-                                const newParams = {
-                                  ...params,
-                                  [key]: e.target.value,
-                                };
-                                updateSelectedNode({ params: newParams });
-                              }}
-                              placeholder={`Enter ${key}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+          {!isMobile && error && (
+            <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg">
+              {error}
             </div>
-
-            <div className="flex gap-3 pt-4 border-t border-gray-200 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setConfigModalOpen(false);
-                  setSelectedNode(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  applyNodeChanges();
-                  setConfigModalOpen(false);
-                  setSelectedNode(null);
-                }}
-              >
-                Save
-              </Button>
+          )}
+          {!isMobile && success && (
+            <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
+              Workflow saved successfully!
             </div>
-          </div>
-        )}
-      </Dialog>
-
-      {/* Error/Success Messages */}
-      {error && (
-        <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
-          Workflow saved successfully!
-        </div>
+          )}
+        </>
       )}
     </div>
   );

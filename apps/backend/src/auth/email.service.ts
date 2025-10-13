@@ -9,26 +9,20 @@ export class EmailService {
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
-    console.log('EmailService: RESEND_API_KEY exists:', !!apiKey);
     if (apiKey) {
       this.resend = new Resend(apiKey);
-      console.log('EmailService: Resend client initialized');
     }
     this.fromEmail =
       this.config.get<string>('EMAIL_FROM') || 'onboarding@resend.dev';
-    console.log('EmailService: Using from email:', this.fromEmail);
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string): Promise<void> {
-    console.log('sendPasswordResetEmail called for:', to);
     if (!this.resend) {
       console.warn('Resend not configured, skipping email send');
-      console.log(`Reset token for ${to}: ${resetToken}`);
       return;
     }
 
     const resetUrl = `${this.config.get<string>('WEB_URL') || 'http://localhost:3000'}/auth/reset-password?token=${resetToken}`;
-    console.log('Reset URL:', resetUrl);
 
     try {
       const result = await this.resend.emails.send({
@@ -53,7 +47,6 @@ export class EmailService {
           </div>
         `,
       });
-      console.log('Password reset email sent successfully:', result);
     } catch (error) {
       console.error('Failed to send password reset email:', error);
       throw new Error('Failed to send password reset email');

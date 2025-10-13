@@ -27,10 +27,8 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSuccess(false);
     setLoading(true);
-    console.log("Sending forgot password request for:", email);
     try {
       const result = await forgotPassword(email);
-      console.log("Forgot password result:", result);
       setSuccess(true);
       setEmail("");
     } catch (err) {
