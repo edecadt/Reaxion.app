@@ -414,6 +414,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
 
+  services/google:
+    dependencies:
+      "@area/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   services/test-webhook:
     dependencies:
       "@area/sdk":

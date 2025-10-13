@@ -249,6 +249,8 @@ export class ServiceAuthService {
       clientId,
       clientSecret,
       redirectUri,
+      authorizationParams: auth.authorizationParams,
+      tokenParams: auth.tokenParams,
     };
   }
 
