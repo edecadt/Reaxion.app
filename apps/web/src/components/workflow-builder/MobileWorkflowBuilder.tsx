@@ -14,6 +14,7 @@ type MobileWorkflowBuilderProps = {
   onAddNode: (type: "action" | "reaction") => void;
   onDeleteNode: (nodeId: string) => void;
   onUpdateNode: (nodeId: string, updates: Partial<FlowNode["data"]>) => void;
+  onUpdateNodeConnections: (nodeId: string, nextNodeIds: string[]) => void;
 };
 
 export function MobileWorkflowBuilder({
@@ -23,6 +24,7 @@ export function MobileWorkflowBuilder({
   onAddNode,
   onDeleteNode,
   onUpdateNode,
+  onUpdateNodeConnections,
 }: MobileWorkflowBuilderProps) {
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
 
@@ -371,6 +373,71 @@ export function MobileWorkflowBuilder({
                           })()}
                         </div>
                       )}
+
+                    {/* Next Nodes Selector */}
+                    <div className="space-y-3 pt-2 border-t border-gray-200 mt-4">
+                      <div className="text-sm font-medium text-gray-700">
+                        Next Nodes (What happens after this node?)
+                      </div>
+                      <div className="space-y-2">
+                        {nodes
+                          .filter((n) => n.id !== node.id && !isAction(n))
+                          .map((targetNode) => {
+                            const isConnected =
+                              node.data.next?.includes(targetNode.id) || false;
+                            return (
+                              <label
+                                key={targetNode.id}
+                                className="flex items-center gap-2 p-2 rounded border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isConnected}
+                                  onChange={(e) => {
+                                    const currentNext = Array.isArray(
+                                      node.data.next,
+                                    )
+                                      ? node.data.next
+                                      : node.data.next
+                                        ? [node.data.next]
+                                        : [];
+
+                                    let newNext: string[];
+                                    if (e.target.checked) {
+                                      newNext = [...currentNext, targetNode.id];
+                                    } else {
+                                      newNext = currentNext.filter(
+                                        (id) => id !== targetNode.id,
+                                      );
+                                    }
+
+                                    onUpdateNodeConnections(node.id, newNext);
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {targetNode.data.label ||
+                                      (isAction(targetNode)
+                                        ? "New Trigger"
+                                        : "New Action")}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {targetNode.data.serviceId || "No service"}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        {nodes.filter((n) => n.id !== node.id && !isAction(n))
+                          .length === 0 && (
+                          <div className="text-sm text-gray-500 italic">
+                            No actions available. Add action nodes to create
+                            connections.
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     <div className="flex gap-2 pt-2">
                       <Button

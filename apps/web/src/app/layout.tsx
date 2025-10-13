@@ -37,16 +37,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[hsl(var(--background))] text-[hsl(var(--foreground))]`}
       >
-        {isBuilderPage ? (
-          children
-        ) : (
-          <div className="flex min-h-screen flex-col">
-            <Navbar />
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          {isBuilderPage ? (
+            children
+          ) : (
             <main className="flex flex-1 justify-center px-4 py-8">
               <div className="w-full max-w-5xl">{children}</div>
             </main>
-          </div>
-        )}
+          )}
+        </div>
       </body>
     </html>
   );

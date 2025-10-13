@@ -418,6 +418,40 @@ export default function WorkflowBuilderPage() {
     [nodes],
   );
 
+  const handleMobileUpdateNodeConnections = useCallback(
+    (nodeId: string, nextNodeIds: string[]) => {
+      // Update node's data.next field
+      const updatedNodes = nodes.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, next: nextNodeIds } }
+          : node,
+      );
+      setNodes(updatedNodes);
+
+      // Rebuild edges based on all node connections
+      const newEdges: Edge[] = [];
+      updatedNodes.forEach((node) => {
+        const nextIds = Array.isArray(node.data.next)
+          ? node.data.next
+          : node.data.next
+            ? [node.data.next]
+            : [];
+
+        nextIds.forEach((targetId) => {
+          newEdges.push({
+            id: `${node.id}-${targetId}`,
+            source: node.id,
+            target: targetId,
+            type: "smoothstep",
+            animated: true,
+          });
+        });
+      });
+      setEdges(newEdges);
+    },
+    [nodes],
+  );
+
   const handleMobileDeleteNode = useCallback(
     (nodeId: string) => {
       const filteredNodes = nodes.filter((n) => n.id !== nodeId);
@@ -438,20 +472,15 @@ export default function WorkflowBuilderPage() {
   return (
     <div className="fixed inset-0 flex flex-col md:flex-row overflow-hidden bg-gray-50">
       {isMobile ? (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full pt-16">
           <div className="bg-white border-b border-gray-200 px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/workflows")}
-              >
-                ← Back
-              </Button>
+              <h2 className="text-lg font-semibold">Workflow Builder</h2>
               <Button
                 onClick={handleSave}
                 disabled={!workflowName.trim() || nodes.length === 0}
                 size="sm"
+                className="touch-manipulation"
               >
                 Save
               </Button>
@@ -464,14 +493,17 @@ export default function WorkflowBuilderPage() {
             />
           </div>
 
-          <MobileWorkflowBuilder
-            nodes={getSortedNodesForMobile()}
-            services={services}
-            onNodesChange={handleMobileNodesChange}
-            onAddNode={handleMobileAddNode}
-            onDeleteNode={handleMobileDeleteNode}
-            onUpdateNode={handleMobileUpdateNode}
-          />
+          <div className="flex-1 overflow-hidden">
+            <MobileWorkflowBuilder
+              nodes={getSortedNodesForMobile()}
+              services={services}
+              onNodesChange={handleMobileNodesChange}
+              onAddNode={handleMobileAddNode}
+              onDeleteNode={handleMobileDeleteNode}
+              onUpdateNode={handleMobileUpdateNode}
+              onUpdateNodeConnections={handleMobileUpdateNodeConnections}
+            />
+          </div>
 
           {success && (
             <div className="absolute top-20 left-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
