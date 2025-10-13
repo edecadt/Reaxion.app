@@ -16,9 +16,9 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 RUN pnpm install --frozen-lockfile
 FROM installer AS builder
-WORKDIR /app/apps/web
-RUN pnpm run build
-RUN test -f .next/BUILD_ID || test -d .next
+WORKDIR /app
+RUN pnpm turbo build --filter=web
+RUN test -f apps/web/.next/BUILD_ID || test -d apps/web/.next
 FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 ENV PORT=8081

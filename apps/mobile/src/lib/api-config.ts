@@ -1,9 +1,5 @@
 import Constants from "expo-constants";
 
-/**
- * Reads the API base URL from Expo public env or app config.
- * Throws if not configured to prevent accidental network calls.
- */
 export function getApiUrl(): string {
   const fromEnv =
     process.env.EXPO_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "";
@@ -23,7 +19,6 @@ export function getApiUrl(): string {
   return url;
 }
 
-/** Returns true if an API base URL is available. */
 export function isApiConfigured(): boolean {
   try {
     void getApiUrl();
@@ -33,7 +28,6 @@ export function isApiConfigured(): boolean {
   }
 }
 
-/** Safe getter: returns null instead of throwing when not configured. */
 export function tryGetApiUrl(): string | null {
   try {
     return getApiUrl();

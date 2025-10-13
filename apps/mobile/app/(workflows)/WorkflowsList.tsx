@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "expo-router";
 import type { Workflow } from "@reaxion/common";
 import {
@@ -17,30 +17,38 @@ import {
   executeWorkflow,
 } from "../../src/lib/api";
 import { useToast } from "../../src/components/Toast";
+import { useAuth } from "../../src/hooks/useAuth";
 
 export default function WorkflowsList() {
   const toast = useToast();
+  const { token, loading: authLoading } = useAuth();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function load(opts?: { silent?: boolean }) {
-    const silent = !!opts?.silent;
-    if (!silent) setLoading(true);
-    setError(null);
-    try {
-      const data = await getWorkflows();
-      setWorkflows(data);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Erreur inconnue";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = !!opts?.silent;
+      if (!token) {
+        return;
+      }
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const data = await getWorkflows(token);
+        setWorkflows(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erreur inconnue";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [token, toast],
+  );
 
   async function onRefresh() {
     setRefreshing(true);
@@ -55,8 +63,8 @@ export default function WorkflowsList() {
     setBusyId(w.id);
     try {
       const updated = w.active
-        ? await deactivateWorkflow(w.id)
-        : await activateWorkflow(w.id);
+        ? await deactivateWorkflow(w.id, token ?? undefined)
+        : await activateWorkflow(w.id, token ?? undefined);
       setWorkflows((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item)),
       );
@@ -72,7 +80,7 @@ export default function WorkflowsList() {
   async function runNow(w: Workflow) {
     setBusyId(w.id);
     try {
-      const { runId } = await executeWorkflow(w.id);
+      const { runId } = await executeWorkflow(w.id, token ?? undefined);
       toast.success(`Exécution démarrée: ${runId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erreur inconnue";
@@ -83,8 +91,9 @@ export default function WorkflowsList() {
   }
 
   useEffect(() => {
+    if (authLoading || !token) return;
     void load();
-  }, []);
+  }, [authLoading, token, load]);
 
   return (
     <ScrollView

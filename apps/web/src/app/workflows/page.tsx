@@ -160,7 +160,7 @@ export default function WorkflowsPage() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => router.push("/workflows/create")}
+            onClick={() => router.push("/workflows/builder")}
           >
             Créer un workflow
           </Button>
@@ -259,7 +259,7 @@ export default function WorkflowsPage() {
             </p>
             <Button
               variant="secondary"
-              onClick={() => router.push("/workflows/create")}
+              onClick={() => router.push("/workflows/builder")}
             >
               Créer un workflow
             </Button>

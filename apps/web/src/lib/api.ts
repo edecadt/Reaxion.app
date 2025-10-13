@@ -45,8 +45,12 @@ async function request<T>(
     signal: signal ?? controller.signal,
   };
 
+  const normalizedBaseUrl = API_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  const url = `${normalizedBaseUrl}/${normalizedPath}`;
+
   try {
-    const res = await fetch(`${API_URL}${path}`, init);
+    const res = await fetch(url, init);
     const text = await res.text();
     const isJson = (res.headers.get("content-type") || "").includes(
       "application/json",
@@ -69,9 +73,29 @@ async function request<T>(
   }
 }
 
+export type AboutServiceAuth =
+  | { type: "none" }
+  | {
+      type: "oauth2";
+      authorizationUrl: string;
+      tokenUrl: string;
+      scopes: string[];
+      clientIdEnvVar: string;
+      clientSecretEnvVar: string;
+      authorizationParams?: Record<string, string>;
+      tokenParams?: Record<string, string>;
+    }
+  | {
+      type: "api_key";
+      keyName: string;
+      keyLocation: "header" | "query";
+      description?: string;
+    };
+
 export type AboutService = {
   id?: string;
   name: string;
+  auth?: AboutServiceAuth | string;
   actions: {
     id?: string;
     name: string;
@@ -239,4 +263,51 @@ export async function resetPassword(
   return await request("POST", "/auth/reset-password", {
     body: { token, password },
   });
+}
+
+export type ServiceConnection = {
+  id: string;
+  serviceId: string;
+  authType: string;
+  scopes: string[];
+  isExpired: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getServiceConnections(
+  token: string,
+): Promise<ServiceConnection[]> {
+  return await request<ServiceConnection[]>(
+    "GET",
+    "/api/service-auth/connections",
+    { token },
+  );
+}
+
+export async function getServiceConnection(
+  serviceId: string,
+  token: string,
+): Promise<ServiceConnection | null> {
+  return await request<ServiceConnection | null>(
+    "GET",
+    `/api/service-auth/connections/${encodeURIComponent(serviceId)}`,
+    { token },
+  );
+}
+
+export async function disconnectService(
+  serviceId: string,
+  token: string,
+): Promise<{ success: boolean }> {
+  return await request<{ success: boolean }>(
+    "DELETE",
+    `/api/service-auth/disconnect/${encodeURIComponent(serviceId)}`,
+    { token },
+  );
+}
+
+export function getOAuth2ConnectUrl(serviceId: string): string {
+  const base = API_URL.replace(/\/+$/, "");
+  return `${base}/api/service-auth/connect/${encodeURIComponent(serviceId)}`;
 }

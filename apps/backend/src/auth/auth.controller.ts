@@ -6,19 +6,45 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import {
+  AuthResponseDto,
+  ForgotPasswordDto,
+  LoginDto,
+  MessageResponseDto,
+  RegisterDto,
+  ResetPasswordDto,
+} from './dto';
 
-type RegisterDto = { email: string; password: string; name?: string };
-type LoginDto = { email: string; password: string };
-type ForgotPasswordDto = { email: string };
-type ResetPasswordDto = { token: string; password: string };
-
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
-  async register(@Body() body: RegisterDto) {
+  @ApiOperation({ summary: 'Create a new user account' })
+  @ApiBody({ type: RegisterDto })
+  @ApiCreatedResponse({
+    description: 'User registered successfully',
+    type: AuthResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing required fields or invalid payload',
+  })
+  @ApiConflictResponse({
+    description: 'Email already in use',
+  })
+  async register(@Body() body: RegisterDto): Promise<AuthResponseDto> {
     const { email, password, name } = body;
     if (!email || !password) {
       throw new BadRequestException('email and password are required');
@@ -29,7 +55,19 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: LoginDto) {
+  @ApiOperation({ summary: 'Authenticate an existing user' })
+  @ApiBody({ type: LoginDto })
+  @ApiOkResponse({
+    description: 'User authenticated successfully',
+    type: AuthResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing required fields or invalid payload',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid email or password',
+  })
+  async login(@Body() body: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = body;
     if (!email || !password) {
       throw new BadRequestException('email and password are required');
@@ -40,7 +78,18 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() body: ForgotPasswordDto) {
+  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiOkResponse({
+    description: 'Password reset email processed',
+    type: MessageResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing required fields or invalid payload',
+  })
+  async forgotPassword(
+    @Body() body: ForgotPasswordDto,
+  ): Promise<MessageResponseDto> {
     const { email } = body;
     if (!email) {
       throw new BadRequestException('email is required');
@@ -51,7 +100,21 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() body: ResetPasswordDto) {
+  @ApiOperation({ summary: 'Reset a user password using a reset token' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiOkResponse({
+    description: 'Password reset completed',
+    type: MessageResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing required fields or invalid payload',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired reset token',
+  })
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+  ): Promise<MessageResponseDto> {
     const { token, password } = body;
     if (!token || !password) {
       throw new BadRequestException('token and password are required');

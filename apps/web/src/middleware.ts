@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const protectedRoutes = ["/workflows", "/workflows/create"];
+const protectedRoutes = ["/workflows", "/workflows/builder"];
 const authRoutes = ["/auth/login", "/auth/register"];
 
 export function middleware(request: NextRequest) {

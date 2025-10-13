@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
-import { clearAuth } from "../lib/auth";
 import { cn } from "../lib/utils";
+import { clearAuth, getUser } from "../lib/auth";
 
 type User = { id: number; email: string; name?: string | null };
 
@@ -13,8 +13,7 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("user");
-    setUser(raw ? (JSON.parse(raw) as User) : null);
+    setUser(getUser());
   }, []);
 
   const logout = () => {
@@ -49,6 +48,16 @@ export default function Navbar() {
           >
             Créer un workflow
           </Link>
+          {user && (
+            <Link
+              href="/settings"
+              className={cn(
+                "hidden text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))] md:inline-flex",
+              )}
+            >
+              Connexions
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {user ? (

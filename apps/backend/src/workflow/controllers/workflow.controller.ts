@@ -13,13 +13,35 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { WorkflowEngineService } from '../services/workflow-engine.service';
-import type { CreateWorkflowDto, UpdateWorkflowDto } from '../dto';
+import {
+  CreateWorkflowDto,
+  UpdateWorkflowDto,
+  WorkflowExecutionResponseDto,
+  WorkflowLogDto,
+  WorkflowResponseDto,
+  WorkflowRunDto,
+} from '../dto';
 import type { Workflow } from '../types/workflow.types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkflowOwnershipGuard } from '../guards/workflow-ownership.guard';
 import { CurrentUser } from '../../auth/current-user.decorator';
 
+@ApiTags('Workflows')
+@ApiBearerAuth('access-token')
 @Controller('workflows')
 @UseGuards(JwtAuthGuard)
 export class WorkflowController {
@@ -27,6 +49,15 @@ export class WorkflowController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new workflow definition' })
+  @ApiBody({ type: CreateWorkflowDto })
+  @ApiCreatedResponse({
+    description: 'Workflow created successfully',
+    type: WorkflowResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'A workflow with the provided identifier already exists',
+  })
   async createWorkflow(
     @Body() createWorkflowDto: CreateWorkflowDto,
     @CurrentUser() user: { sub: number; email: string },
@@ -68,6 +99,18 @@ export class WorkflowController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'List workflows for the authenticated user' })
+  @ApiQuery({
+    name: 'active',
+    required: false,
+    type: Boolean,
+    description: 'Filter workflows by their active state',
+  })
+  @ApiOkResponse({
+    description: 'List of workflows accessible by the user',
+    type: WorkflowResponseDto,
+    isArray: true,
+  })
   getAllWorkflows(
     @Query('active') active?: string,
     @CurrentUser() user?: { sub: number; email: string },
@@ -84,6 +127,19 @@ export class WorkflowController {
 
   @Get(':id')
   @UseGuards(WorkflowOwnershipGuard)
+  @ApiOperation({ summary: 'Retrieve a workflow by identifier' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to retrieve',
+    example: 'daily-report',
+  })
+  @ApiOkResponse({
+    description: 'Workflow details',
+    type: WorkflowResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
   getWorkflowById(@Param('id') id: string): Workflow {
     const workflow = this.workflowEngineService.getWorkflow(id);
     if (!workflow) {
@@ -94,6 +150,23 @@ export class WorkflowController {
 
   @Patch(':id')
   @UseGuards(WorkflowOwnershipGuard)
+  @ApiOperation({ summary: 'Update an existing workflow' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to update',
+    example: 'daily-report',
+  })
+  @ApiBody({ type: UpdateWorkflowDto })
+  @ApiOkResponse({
+    description: 'Workflow updated successfully',
+    type: WorkflowResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'The workflow could not be updated',
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
   async updateWorkflow(
     @Param('id') id: string,
     @Body() updateWorkflowDto: UpdateWorkflowDto,
@@ -133,6 +206,21 @@ export class WorkflowController {
   @Delete(':id')
   @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a workflow' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to delete',
+    example: 'daily-report',
+  })
+  @ApiNoContentResponse({
+    description: 'Workflow deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
+  @ApiBadRequestResponse({
+    description: 'The workflow could not be deleted',
+  })
   async deleteWorkflow(@Param('id') id: string): Promise<void> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
@@ -150,6 +238,22 @@ export class WorkflowController {
   @Post(':id/activate')
   @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Activate a workflow' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to activate',
+    example: 'daily-report',
+  })
+  @ApiOkResponse({
+    description: 'Workflow activated successfully',
+    type: WorkflowResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
+  @ApiBadRequestResponse({
+    description: 'The workflow could not be activated',
+  })
   async activateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
@@ -169,6 +273,22 @@ export class WorkflowController {
   @Post(':id/deactivate')
   @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Deactivate a workflow' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to deactivate',
+    example: 'daily-report',
+  })
+  @ApiOkResponse({
+    description: 'Workflow deactivated successfully',
+    type: WorkflowResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
+  @ApiBadRequestResponse({
+    description: 'The workflow could not be deactivated',
+  })
   async deactivateWorkflow(@Param('id') id: string): Promise<Workflow> {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {
@@ -188,6 +308,22 @@ export class WorkflowController {
   @Post(':id/execute')
   @UseGuards(WorkflowOwnershipGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger a workflow run manually' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow to execute',
+    example: 'daily-report',
+  })
+  @ApiOkResponse({
+    description: 'Workflow run started successfully',
+    type: WorkflowExecutionResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'The workflow could not be executed',
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
   executeWorkflow(@Param('id') id: string): { runId: string } {
     try {
       const runId = this.workflowEngineService.executeWorkflow(id);
@@ -203,6 +339,20 @@ export class WorkflowController {
   }
 
   @Get('runs/:runId/logs')
+  @ApiOperation({ summary: 'Retrieve logs produced during a workflow run' })
+  @ApiParam({
+    name: 'runId',
+    description: 'Identifier of the workflow run',
+    example: 'run-3a5c4d',
+  })
+  @ApiOkResponse({
+    description: 'Ordered logs for the workflow run',
+    type: WorkflowLogDto,
+    isArray: true,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow run not found for the provided identifier',
+  })
   async getRunLogs(@Param('runId') runId: string) {
     const run = await this.workflowEngineService.getRunStatus(runId);
     if (!run) {
@@ -212,6 +362,19 @@ export class WorkflowController {
   }
 
   @Get('runs/:runId')
+  @ApiOperation({ summary: 'Retrieve the status of a workflow run' })
+  @ApiParam({
+    name: 'runId',
+    description: 'Identifier of the workflow run',
+    example: 'run-3a5c4d',
+  })
+  @ApiOkResponse({
+    description: 'Detailed workflow run information',
+    type: WorkflowRunDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow run not found for the provided identifier',
+  })
   async getRunDetails(@Param('runId') runId: string) {
     const run = await this.workflowEngineService.getRunStatus(runId);
     if (!run) {
@@ -222,6 +385,20 @@ export class WorkflowController {
 
   @Get(':id/runs')
   @UseGuards(WorkflowOwnershipGuard)
+  @ApiOperation({ summary: 'List previous workflow runs for a workflow' })
+  @ApiParam({
+    name: 'id',
+    description: 'Identifier of the workflow',
+    example: 'daily-report',
+  })
+  @ApiOkResponse({
+    description: 'List of workflow runs',
+    type: WorkflowRunDto,
+    isArray: true,
+  })
+  @ApiNotFoundResponse({
+    description: 'Workflow not found for the provided identifier',
+  })
   async getWorkflowRuns(@Param('id') id: string) {
     const existingWorkflow = this.workflowEngineService.getWorkflow(id);
     if (!existingWorkflow) {

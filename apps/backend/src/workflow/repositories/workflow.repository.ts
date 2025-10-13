@@ -72,6 +72,8 @@ export class WorkflowRepository implements OnModuleInit {
       name: dbWorkflow.name,
       active: dbWorkflow.active,
       nodes: dbWorkflow.nodes.map((node: any) => this.mapDbNodeToNode(node)),
+      userId: dbWorkflow.userId,
+      webhookToken: dbWorkflow.webhookToken,
     };
   }
 
@@ -92,23 +94,18 @@ export class WorkflowRepository implements OnModuleInit {
   async createWorkflow(workflow: Workflow): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        const existingUser = await tx.user.findFirst();
-        const user =
-          existingUser ||
-          (await tx.user.create({
-            data: {
-              email: 'dev@example.com',
-              name: 'Dev User',
-              passwordHash: 'dev-password-hash',
-            },
-          }));
+        const userId = workflow.userId;
+        if (!userId) {
+          throw new Error('Workflow must have a userId');
+        }
 
         await tx.workflow.create({
           data: {
             id: workflow.id,
             name: workflow.name,
             active: workflow.active,
-            userId: user.id,
+            userId: userId,
+            webhookToken: workflow.webhookToken,
           },
         });
 
@@ -155,6 +152,8 @@ export class WorkflowRepository implements OnModuleInit {
             name: workflow.name,
             active: workflow.active,
             nodes: cacheNodes,
+            userId: workflow.userId,
+            webhookToken: workflow.webhookToken,
           });
           return;
         }

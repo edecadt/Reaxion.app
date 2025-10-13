@@ -137,13 +137,29 @@ export type WebhookDefinition<
     | null;
 };
 
-export type AuthConfig = {
-  type: "none" | "oauth2" | "api_key";
-  scopes?: string[];
-  authUrl?: string;
-  tokenUrl?: string;
-  clientId?: string;
+export type OAuth2AuthConfig = {
+  type: "oauth2";
+  authorizationUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  clientIdEnvVar: string;
+  clientSecretEnvVar: string;
+  authorizationParams?: Record<string, string>;
+  tokenParams?: Record<string, string>;
 };
+
+export type ApiKeyAuthConfig = {
+  type: "api_key";
+  keyName: string;
+  keyLocation: "header" | "query";
+  description?: string;
+};
+
+export type NoneAuthConfig = {
+  type: "none";
+};
+
+export type AuthConfig = OAuth2AuthConfig | ApiKeyAuthConfig | NoneAuthConfig;
 
 export type ServiceDefinition = {
   id: string;
@@ -171,7 +187,7 @@ export type ServiceManifest = {
   version: string;
   description: string;
   logo: string;
-  auth: string;
+  auth: AuthConfig;
   actions: Array<{
     id: string;
     name: string;
