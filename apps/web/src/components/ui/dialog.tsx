@@ -31,24 +31,26 @@ export function Dialog({ open, onClose, children, title }: DialogProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center text-[hsl(var(--foreground))] transition-colors">
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-auto bg-white rounded-xl shadow-2xl m-4"
+        className="relative z-10 m-4 flex w-full max-h-[90vh] max-w-2xl flex-col overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-2xl transition-colors"
       >
         {title && (
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <div className="sticky top-0 flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--background))]/85">
+            <h2 className="text-xl font-semibold text-[hsl(var(--foreground))]">
+              {title}
+            </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
             >
               <svg
-                className="w-6 h-6"
+                className="h-6 w-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -63,7 +65,9 @@ export function Dialog({ open, onClose, children, title }: DialogProps) {
             </button>
           </div>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="flex-1 overflow-auto px-6 py-4 text-[hsl(var(--foreground))]">
+          {children}
+        </div>
       </div>
     </div>
   );

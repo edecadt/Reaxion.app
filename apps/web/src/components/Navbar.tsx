@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
-import { cn } from "../lib/utils";
 import { clearAuth, getUser } from "../lib/auth";
+import { cn } from "../lib/utils";
+import { ThemeToggle } from "./theme/ThemeToggle";
 
 type User = { id: number; email: string; name?: string | null };
 
@@ -105,6 +106,7 @@ export default function Navbar() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           {user ? (
             <>
               <span className="hidden text-sm text-[hsl(var(--muted-foreground))] sm:inline">
@@ -140,6 +142,12 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-[hsl(var(--border))] bg-[hsl(var(--background))]">
           <div className="px-2 pt-2 pb-3 space-y-1">
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                Thème
+              </span>
+              <ThemeToggle className="h-9 w-9" />
+            </div>
             <Link
               href="/workflows"
               onClick={() => setMobileMenuOpen(false)}
