@@ -44,17 +44,7 @@ export default function WorkflowsLayout() {
       <Stack.Screen
         name="create"
         options={{
-          title: "Créer un workflow",
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              <Pressable onPress={() => router.push("/")}>
-                <Text style={styles.headerButton}>Home</Text>
-              </Pressable>
-              <Pressable onPress={logout}>
-                <Text style={styles.headerButtonDanger}>Logout</Text>
-              </Pressable>
-            </View>
-          ),
+          headerShown: false,
         }}
       />
     </Stack>
