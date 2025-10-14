@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import session from 'express-session';
 
 import { AppModule } from './app.module';
 
@@ -11,6 +12,20 @@ const loggerContext = 'Bootstrap';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  app.use(
+    session({
+      secret:
+        configService.get<string>('SESSION_SECRET') ||
+        'reaxion-oauth-secret-change-in-production',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: 600000,
+        secure: process.env.NODE_ENV === 'production',
+      },
+    }),
+  );
 
   const corsOriginsEnv = configService.get<string>('CORS_ORIGINS');
   const webPort = Number(configService.get<string>('WEB_PORT')) || 8081;

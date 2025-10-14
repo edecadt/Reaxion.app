@@ -177,8 +177,6 @@ export default function MobileWorkflowBuilder() {
         }),
       };
 
-      console.log("Saving workflow:", JSON.stringify(workflow, null, 2));
-      console.log("Token:", token);
       await createWorkflow(workflow, token!);
       toast.show("Workflow created successfully!", "success");
       router.back();
@@ -380,7 +378,6 @@ export default function MobileWorkflowBuilder() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <TextInput
@@ -408,7 +405,6 @@ export default function MobileWorkflowBuilder() {
         </View>
       </View>
 
-      {/* Nodes List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -446,7 +442,6 @@ export default function MobileWorkflowBuilder() {
                 ]}
                 onPress={() => setExpandedNode(isExpanded ? null : node.id)}
               >
-                {/* Node Header */}
                 <View style={styles.nodeHeader}>
                   <View
                     style={[
@@ -481,10 +476,8 @@ export default function MobileWorkflowBuilder() {
                   />
                 </View>
 
-                {/* Expanded Content */}
                 {isExpanded && (
                   <View style={styles.nodeContent}>
-                    {/* Label Input */}
                     <View style={styles.field}>
                       <Text style={styles.label}>Label</Text>
                       <TextInput
@@ -500,7 +493,6 @@ export default function MobileWorkflowBuilder() {
                       />
                     </View>
 
-                    {/* Service Selector */}
                     <View style={styles.field}>
                       <Text style={styles.label}>Service</Text>
                       <Pressable
@@ -524,7 +516,6 @@ export default function MobileWorkflowBuilder() {
                       </Pressable>
                     </View>
 
-                    {/* Action/Reaction Selector */}
                     {node.data.serviceId && (
                       <View style={styles.field}>
                         <Text style={styles.label}>
@@ -562,7 +553,6 @@ export default function MobileWorkflowBuilder() {
                       </View>
                     )}
 
-                    {/* Parameters */}
                     {node.data.serviceId &&
                       (node.data.actionId || node.data.reactionId) && (
                         <View style={styles.parametersSection}>
@@ -628,7 +618,6 @@ export default function MobileWorkflowBuilder() {
                         </View>
                       )}
 
-                    {/* Next Nodes Selector */}
                     <View style={styles.parametersSection}>
                       <Text style={styles.sectionTitle}>
                         Next Nodes (What happens after?)
@@ -650,7 +639,6 @@ export default function MobileWorkflowBuilder() {
                       </Pressable>
                     </View>
 
-                    {/* Delete Button */}
                     <Pressable
                       style={styles.deleteButton}
                       onPress={() => handleDeleteNode(node.id)}
@@ -666,7 +654,6 @@ export default function MobileWorkflowBuilder() {
         )}
       </ScrollView>
 
-      {/* Add Node Buttons */}
       <View style={styles.footer}>
         <Pressable
           style={[styles.addButton, styles.addButtonAction]}
@@ -684,7 +671,6 @@ export default function MobileWorkflowBuilder() {
         </Pressable>
       </View>
 
-      {/* Picker Modal */}
       <Modal
         visible={pickerVisible}
         animationType="slide"

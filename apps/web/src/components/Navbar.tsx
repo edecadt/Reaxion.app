@@ -15,6 +15,21 @@ export default function Navbar() {
 
   useEffect(() => {
     setUser(getUser());
+
+    const handleStorageChange = () => {
+      setUser(getUser());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    const interval = setInterval(() => {
+      setUser(getUser());
+    }, 1000);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const logout = () => {
@@ -27,7 +42,6 @@ export default function Navbar() {
     <nav className="sticky top-0 z-40 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--background))]/60">
       <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
         <div className="flex items-center gap-6">
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] focus:outline-none"
@@ -123,7 +137,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-[hsl(var(--border))] bg-[hsl(var(--background))]">
           <div className="px-2 pt-2 pb-3 space-y-1">

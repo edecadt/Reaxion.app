@@ -900,16 +900,22 @@ export class WorkflowRunService {
 
       const stateKey = `${workflow.id}_${triggerNode.id}`;
       const globalState = this.getGlobalState();
+      const userId = workflow.userId || 1;
+      const connection = await this.loadServiceConnection(
+        userId,
+        triggerNode.serviceId,
+      );
 
       const actionContext: PluginActionContext = {
         serviceId: triggerNode.serviceId,
         actionId: triggerNode.actionId!,
         params: triggerNode.params,
-        userId: workflow.userId || 1,
+        userId,
         state: globalState[stateKey] || {},
         logger: this.logger,
         webhookEvents: this.webhookEvents,
         workflowToken: workflow.webhookToken,
+        connection,
       };
 
       const result = await handler.detect(

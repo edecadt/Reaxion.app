@@ -38,7 +38,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[hsl(var(--background))] text-[hsl(var(--foreground))]`}
       >
         <div className="flex min-h-screen flex-col">
-          <Navbar />
+          {!isBuilderPage && <Navbar />}
           {isBuilderPage ? (
             children
           ) : (
