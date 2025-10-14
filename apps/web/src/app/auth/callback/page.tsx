@@ -12,18 +12,11 @@ function AuthCallback() {
     const token = searchParams.get("token");
     const mobileRedirect = searchParams.get("mobile_redirect");
 
-    console.log("OAuth callback - token:", token ? "present" : "missing");
-    console.log("OAuth callback - mobile_redirect:", mobileRedirect);
-
-    // If this is a mobile OAuth callback, redirect to mobile app immediately
     if (token && mobileRedirect) {
-      console.log("Redirecting to mobile app:", mobileRedirect);
       const redirectUrl = `${mobileRedirect}?token=${token}`;
 
-      // Redirect to mobile app
       window.location.href = redirectUrl;
 
-      // Try to close the window after a short delay (for mobile browsers)
       setTimeout(() => {
         window.close();
       }, 500);
@@ -31,11 +24,9 @@ function AuthCallback() {
       return;
     }
 
-    // Normal web flow
     if (token) {
       setAuthToken(token);
 
-      // Decode JWT to extract user info (simple base64 decode)
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         setUser({

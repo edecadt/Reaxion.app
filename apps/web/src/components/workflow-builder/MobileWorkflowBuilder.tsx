@@ -374,7 +374,6 @@ export function MobileWorkflowBuilder({
                         </div>
                       )}
 
-                    {/* Next Nodes Selector */}
                     <div className="space-y-3 pt-2 border-t border-gray-200 mt-4">
                       <div className="text-sm font-medium text-gray-700">
                         Next Nodes (What happens after this node?)

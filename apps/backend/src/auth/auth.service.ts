@@ -243,7 +243,6 @@ export class AuthService {
   }): Promise<AuthResult> {
     const email = oauthUser.email.trim().toLowerCase();
 
-    // Check if user exists
     let user = await this.prisma.user.findUnique({
       where: { email },
       select: {
@@ -253,13 +252,12 @@ export class AuthService {
       },
     });
 
-    // Create user if doesn't exist
     if (!user) {
       user = await this.prisma.user.create({
         data: {
           email,
           name: oauthUser.name,
-          passwordHash: '', // OAuth users don't have passwords
+          passwordHash: '',
         },
         select: {
           id: true,

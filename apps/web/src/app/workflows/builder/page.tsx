@@ -421,7 +421,6 @@ export default function WorkflowBuilderPage() {
 
   const handleMobileUpdateNodeConnections = useCallback(
     (nodeId: string, nextNodeIds: string[]) => {
-      // Update node's data.next field
       const updatedNodes = nodes.map((node) =>
         node.id === nodeId
           ? { ...node, data: { ...node.data, next: nextNodeIds } }
@@ -429,7 +428,6 @@ export default function WorkflowBuilderPage() {
       );
       setNodes(updatedNodes);
 
-      // Rebuild edges based on all node connections
       const newEdges: Edge[] = [];
       updatedNodes.forEach((node) => {
         const nextIds = Array.isArray(node.data.next)

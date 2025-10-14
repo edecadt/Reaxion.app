@@ -36,12 +36,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ): Promise<any> {
     const { name, emails, photos } = profile;
 
-    console.log('Google strategy validate - req.query:', req.query);
-    console.log(
-      'Google strategy validate - req.query.redirect_uri:',
-      req.query.redirect_uri,
-    );
-
     const user = {
       email: emails[0].value,
       name: name.givenName + ' ' + name.familyName,
@@ -50,8 +44,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       provider: 'google',
       redirectUri: req.query.redirect_uri || null,
     };
-
-    console.log('Google strategy - user.redirectUri:', user.redirectUri);
 
     done(null, user);
   }

@@ -13,7 +13,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Configure session for OAuth state management
   app.use(
     session({
       secret:
@@ -22,7 +21,7 @@ async function bootstrap() {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        maxAge: 600000, // 10 minutes
+        maxAge: 600000,
         secure: process.env.NODE_ENV === 'production',
       },
     }),
