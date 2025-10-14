@@ -238,3 +238,65 @@ export async function resetPassword(
     body: { token, password },
   });
 }
+
+export type ServiceConnection = {
+  id: number;
+  serviceId: string;
+  authType: string;
+  scopes: string[];
+  isExpired: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getServiceConnections(
+  token: string,
+): Promise<ServiceConnection[]> {
+  return await request<ServiceConnection[]>(
+    "GET",
+    "/api/service-auth/connections",
+    { token },
+  );
+}
+
+export async function getServiceConnection(
+  serviceId: string,
+  token: string,
+): Promise<ServiceConnection | null> {
+  return await request<ServiceConnection | null>(
+    "GET",
+    `/api/service-auth/connections/${encodeURIComponent(serviceId)}`,
+    { token },
+  );
+}
+
+export async function connectWithApiKey(
+  serviceId: string,
+  apiKey: string,
+  token: string,
+): Promise<ServiceConnection> {
+  return await request<ServiceConnection>(
+    "POST",
+    "/api/service-auth/connect/api-key",
+    {
+      body: { serviceId, apiKey },
+      token,
+    },
+  );
+}
+
+export async function disconnectService(
+  serviceId: string,
+  token: string,
+): Promise<{ success: boolean }> {
+  return await request<{ success: boolean }>(
+    "DELETE",
+    `/api/service-auth/disconnect/${encodeURIComponent(serviceId)}`,
+    { token },
+  );
+}
+
+export function getOAuth2ConnectUrl(serviceId: string): string {
+  const base = getApiUrl().replace(/\/+$/, "");
+  return `${base}/api/service-auth/connect/${encodeURIComponent(serviceId)}`;
+}

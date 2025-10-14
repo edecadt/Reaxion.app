@@ -222,6 +222,7 @@ export class ServiceAuthController {
           userId,
           logger: console,
           connection: {
+            accessToken: connection.apiKey ?? undefined,
             metadata: connection.metadata as Record<string, unknown>,
           },
         });

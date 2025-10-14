@@ -1,0 +1,9 @@
+{
+  "name": "openai-service",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@area/sdk": "workspace:*",
+    "openai": "^4.77.3"
+  }
+}
