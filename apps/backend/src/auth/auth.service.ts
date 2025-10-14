@@ -174,18 +174,14 @@ export class AuthService {
 
   async forgotPassword(email: string): Promise<{ message: string }> {
     const normalizedEmail = email.trim().toLowerCase();
-    console.log('Looking for user with email:', normalizedEmail);
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true, email: true },
     });
 
     if (!user) {
-      console.log('User not found, skipping email send');
       return { message: 'If the email exists, a reset link has been sent' };
     }
-
-    console.log('User found:', user.id);
 
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);

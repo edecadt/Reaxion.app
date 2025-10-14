@@ -48,9 +48,7 @@ export class WorkflowRepository implements OnModuleInit {
     try {
       const dbWorkflows = await this.prisma.workflow.findMany({
         include: {
-          nodes: {
-            orderBy: { position: 'asc' },
-          },
+          nodes: true,
         },
       });
 
@@ -88,6 +86,8 @@ export class WorkflowRepository implements OnModuleInit {
       params: dbNode.params as Record<string, unknown>,
       next: dbNode.next as string | string[] | undefined,
       connections: undefined,
+      label: dbNode.label || undefined,
+      position: dbNode.position || undefined,
     };
   }
 
@@ -123,7 +123,7 @@ export class WorkflowRepository implements OnModuleInit {
             return next.map((id) => idMap.get(id) ?? id);
           };
 
-          const dbNodes = workflow.nodes.map((node, index) => ({
+          const dbNodes = workflow.nodes.map((node) => ({
             id: idMap.get(node.id)!,
             workflowId: workflow.id,
             serviceId: node.serviceId,
@@ -131,7 +131,8 @@ export class WorkflowRepository implements OnModuleInit {
             reactionId: node.reactionId,
             params: node.params as any,
             next: transformNext(node.next) as any,
-            position: index,
+            position: node.position as any,
+            label: node.label,
           }));
 
           await tx.workflowNode.createMany({ data: dbNodes });
@@ -143,6 +144,8 @@ export class WorkflowRepository implements OnModuleInit {
             reactionId: node.reactionId,
             params: node.params,
             next: transformNext(node.next),
+            label: node.label,
+            position: node.position,
           }));
           this.workflows.set(workflow.id, {
             id: workflow.id,
@@ -218,7 +221,7 @@ export class WorkflowRepository implements OnModuleInit {
               return next.map((nid) => idMap.get(nid) ?? nid);
             };
 
-            const dbNodes = updates.nodes.map((node, index) => ({
+            const dbNodes = updates.nodes.map((node) => ({
               id: idMap.get(node.id)!,
               workflowId: id,
               serviceId: node.serviceId,
@@ -226,7 +229,8 @@ export class WorkflowRepository implements OnModuleInit {
               reactionId: node.reactionId,
               params: node.params as any,
               next: transformNext(node.next) as any,
-              position: index,
+              position: node.position as any,
+              label: node.label,
             }));
 
             await tx.workflowNode.createMany({ data: dbNodes });
@@ -254,6 +258,8 @@ export class WorkflowRepository implements OnModuleInit {
             reactionId: node.reactionId,
             params: node.params,
             next: transformNext(node.next),
+            label: node.label,
+            position: node.position,
           })),
         } as Workflow;
       }

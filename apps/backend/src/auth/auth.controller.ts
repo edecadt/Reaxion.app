@@ -91,12 +91,10 @@ export class AuthController {
     @Body() body: ForgotPasswordDto,
   ): Promise<MessageResponseDto> {
     const { email } = body;
-    console.log('Forgot password request received for:', email);
     if (!email) {
       throw new BadRequestException('email is required');
     }
     const result = await this.auth.forgotPassword(email);
-    console.log('Forgot password result:', result);
     return result;
   }
 

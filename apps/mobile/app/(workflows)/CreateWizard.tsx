@@ -746,7 +746,7 @@ export default function CreateWorkflowWizard() {
                       </Text>
                     </View>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.label}>Nœud d'entrée</Text>
+                      <Text style={styles.label}>Nœud d&apos;entrée</Text>
                       <Text style={styles.summaryValue}>
                         {computeEntryNode(created) ?? "(introuvable)"}
                       </Text>

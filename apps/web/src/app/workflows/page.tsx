@@ -18,6 +18,7 @@ import {
   deactivateWorkflow,
   executeWorkflow,
   getWorkflows,
+  deleteWorkflow,
 } from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { computeEntryNode } from "../../workflows/utils";
@@ -103,6 +104,38 @@ export default function WorkflowsPage() {
     [token],
   );
 
+  const handleDelete = useCallback(
+    async (workflow: Workflow) => {
+      if (!token) return;
+      if (
+        !confirm(
+          `Êtes-vous sûr de vouloir supprimer le workflow "${workflow.name}" ?`,
+        )
+      ) {
+        return;
+      }
+      setBusyId(workflow.id);
+      try {
+        await deleteWorkflow(workflow.id, token);
+        setWorkflows((prev) => prev.filter((w) => w.id !== workflow.id));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Erreur inconnue";
+        setError(message);
+        setState("error");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [token],
+  );
+
+  const handleEdit = useCallback(
+    (workflow: Workflow) => {
+      router.push(`/workflows/builder?id=${encodeURIComponent(workflow.id)}`);
+    },
+    [router],
+  );
+
   const refreshLabel = useMemo(() => {
     if (state === "loading") return "Actualisation…";
     if (state === "error") return "Réessayer";
@@ -127,7 +160,7 @@ export default function WorkflowsPage() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => router.push("/workflows/create")}
+            onClick={() => router.push("/workflows/builder")}
           >
             Créer un workflow
           </Button>
@@ -182,6 +215,13 @@ export default function WorkflowsPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Button
+                      variant="outline"
+                      onClick={() => handleEdit(workflow)}
+                      disabled={loadingThis}
+                    >
+                      Modifier
+                    </Button>
+                    <Button
                       variant="secondary"
                       onClick={() => handleToggleActive(workflow)}
                       disabled={loadingThis}
@@ -194,6 +234,13 @@ export default function WorkflowsPage() {
                       disabled={loadingThis}
                     >
                       Exécuter
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDelete(workflow)}
+                      disabled={loadingThis}
+                    >
+                      Supprimer
                     </Button>
                   </div>
                 </div>
@@ -212,7 +259,7 @@ export default function WorkflowsPage() {
             </p>
             <Button
               variant="secondary"
-              onClick={() => router.push("/workflows/create")}
+              onClick={() => router.push("/workflows/builder")}
             >
               Créer un workflow
             </Button>

@@ -43,13 +43,13 @@ model WorkflowNode {
   reactionId String?
   params     Json     @default("{}")
   next       Json?
-  position   Int      @default(0)
+  position   Json?
+  label      String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
-  @@index([workflowId, position])
 }
 
 model WorkflowRun {

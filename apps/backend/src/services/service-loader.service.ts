@@ -35,10 +35,12 @@ export class ServiceLoader {
   }
 
   async discover(): Promise<LoadedService[]> {
-    let entries: Awaited<ReturnType<typeof readdir>> = [];
+    let entries: import('fs').Dirent[] = [];
 
     try {
-      entries = await readdir(this.servicesRoot, { withFileTypes: true });
+      entries = (await readdir(this.servicesRoot, {
+        withFileTypes: true,
+      })) as import('fs').Dirent[];
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
         this.logger.warn(
@@ -57,7 +59,7 @@ export class ServiceLoader {
         continue;
       }
 
-      const serviceId = entry.name;
+      const serviceId = entry.name as string;
       const servicePath = join(this.servicesRoot, serviceId);
 
       try {
@@ -109,7 +111,7 @@ export class ServiceLoader {
 
       const manifest = validateManifest(
         parsed,
-        serviceId,
+        serviceId as string,
         manifestPath,
         servicePath,
       );
