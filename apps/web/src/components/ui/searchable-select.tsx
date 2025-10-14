@@ -123,18 +123,25 @@ export function SearchableSelect({
         type="button"
         aria-label={ariaLabel}
         className={cn(
-          "w-full p-2 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
-          disabled && "opacity-60 cursor-not-allowed",
+          "flex w-full items-center justify-between rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] p-2 text-left text-[hsl(var(--foreground))] transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--background))]",
+          disabled && "cursor-not-allowed opacity-60",
         )}
         ref={buttonRef}
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
       >
-        <span className={cn("truncate", !selectedLabel && "text-gray-400")}>
+        <span
+          className={cn(
+            "truncate",
+            selectedLabel
+              ? "text-[hsl(var(--foreground))]"
+              : "text-[hsl(var(--muted-foreground))]",
+          )}
+        >
           {selectedLabel || placeholder}
         </span>
         <svg
-          className="w-4 h-4 text-gray-500 ml-2 shrink-0"
+          className="ml-2 h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -153,7 +160,7 @@ export function SearchableSelect({
         createPortal(
           <div
             ref={overlayRef}
-            className="z-[9999] fixed rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden"
+            className="fixed z-[9999] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-lg transition-colors"
             style={{
               left: overlayStyle.left,
               width: overlayStyle.width,
@@ -170,11 +177,11 @@ export function SearchableSelect({
               e.stopPropagation();
             }}
           >
-            <div className="p-2 border-b border-gray-100">
+            <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] p-2">
               <input
                 ref={searchRef}
                 className={cn(
-                  "w-full h-9 rounded-md border border-gray-300 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  "h-9 w-full rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--background))]",
                   inputClassName,
                 )}
                 placeholder="Search..."
@@ -190,7 +197,7 @@ export function SearchableSelect({
               style={{ maxHeight: overlayStyle.maxList }}
             >
               {filtered.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-gray-400">
+                <div className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
                   No results
                 </div>
               ) : (
@@ -199,8 +206,9 @@ export function SearchableSelect({
                     key={opt.value}
                     type="button"
                     className={cn(
-                      "w-full px-3 py-2 text-left text-sm hover:bg-gray-50",
-                      value === opt.value && "bg-gray-100",
+                      "w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]",
+                      value === opt.value &&
+                        "bg-[hsl(var(--accent))] font-medium text-[hsl(var(--accent-foreground))]",
                     )}
                     onClick={() => {
                       onChange?.(opt.value);

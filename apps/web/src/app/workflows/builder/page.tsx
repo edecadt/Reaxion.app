@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, useRef } from "react";
 import type { Node, Edge } from "reactflow";
 
+import { ThemeToggle } from "../../../components/theme/ThemeToggle";
 import { Button } from "../../../components/ui/button";
 import { Dialog } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
@@ -38,9 +39,6 @@ type InputMetadata = {
 
 type InputDefinitionValue = string | InputMetadata;
 
-/**
- * Helper function to extract input metadata from either old format (string) or new format (InputMetadata)
- */
 function getInputMetadata(value: InputDefinitionValue): {
   type: string;
   uiType?: string;
@@ -524,26 +522,31 @@ export default function WorkflowBuilderPage() {
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col md:flex-row overflow-hidden bg-gray-50">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[hsl(var(--background))] text-[hsl(var(--foreground))] transition-colors md:flex-row">
       {isMobile ? (
-        <div className="flex flex-col h-full pt-16">
-          <div className="bg-white border-b border-gray-200 px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold">Workflow Builder</h2>
-              <Button
-                onClick={handleSave}
-                disabled={!workflowName.trim() || nodes.length === 0}
-                size="sm"
-                className="touch-manipulation"
-              >
-                Save
-              </Button>
+        <div className="flex h-full flex-col pt-16">
+          <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/90 px-4 py-3 backdrop-blur transition-colors supports-[backdrop-filter]:bg-[hsl(var(--background))]/75">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">
+                Workflow Builder
+              </h2>
+              <div className="flex items-center gap-2">
+                <ThemeToggle className="h-9 w-9" />
+                <Button
+                  onClick={handleSave}
+                  disabled={!workflowName.trim() || nodes.length === 0}
+                  size="sm"
+                  className="touch-manipulation"
+                >
+                  Save
+                </Button>
+              </div>
             </div>
             <Input
               value={workflowName}
               onChange={(e) => setWorkflowName(e.target.value)}
               placeholder="Workflow name"
-              className="text-lg font-semibold"
+              className="text-lg font-semibold text-[hsl(var(--foreground))]"
             />
           </div>
 
@@ -560,12 +563,12 @@ export default function WorkflowBuilderPage() {
           </div>
 
           {success && (
-            <div className="absolute top-20 left-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
+            <div className="absolute left-4 right-4 top-20 rounded-lg bg-[hsl(var(--primary))] px-4 py-3 text-sm font-medium text-[hsl(var(--primary-foreground))] shadow-lg">
               Workflow saved successfully!
             </div>
           )}
           {error && (
-            <div className="absolute top-20 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg">
+            <div className="absolute left-4 right-4 top-20 rounded-lg bg-[hsl(var(--destructive))] px-4 py-3 text-sm font-medium text-[hsl(var(--destructive-foreground))] shadow-lg">
               {error}
             </div>
           )}
@@ -573,22 +576,24 @@ export default function WorkflowBuilderPage() {
       ) : (
         <>
           <div
-            className={`bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${
+            className={`z-10 overflow-hidden border-r border-[hsl(var(--border))] bg-[hsl(var(--background))]/95 transition-all duration-300 ease-in-out backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--background))]/80 ${
               sidebarOpen ? "w-80" : "w-0"
-            } overflow-hidden z-10`}
+            }`}
           >
             <div
-              className="h-full overflow-y-auto p-6 space-y-4"
+              className="h-full space-y-4 overflow-y-auto p-6 transition-colors"
               style={{ width: "320px" }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Workflow Builder</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">
+                  Workflow Builder
+                </h2>
                 <button
                   onClick={() => setSidebarOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
                 >
                   <svg
-                    className="w-5 h-5"
+                    className="h-5 w-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -617,10 +622,10 @@ export default function WorkflowBuilderPage() {
               </div>
 
               <div className="space-y-3 pt-4">
-                <h3 className="text-sm font-semibold text-gray-700">
+                <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">
                   Drag Nodes
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
                   Drag and drop nodes onto the canvas
                 </p>
 
@@ -630,11 +635,11 @@ export default function WorkflowBuilderPage() {
                     e.dataTransfer.setData("application/reactflow", "action");
                     e.dataTransfer.effectAllowed = "move";
                   }}
-                  className="flex items-center gap-3 p-3 rounded-lg border-2 border-violet-500 bg-gradient-to-br from-violet-50 to-purple-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
+                  className="flex cursor-move items-center gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 transition-all hover:scale-[1.02] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] hover:shadow-lg"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white dark:from-violet-600 dark:to-purple-500">
                     <svg
-                      className="w-4 h-4 text-white"
+                      className="h-4 w-4 text-white"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -648,10 +653,10 @@ export default function WorkflowBuilderPage() {
                     </svg>
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-gray-900">
+                    <div className="text-sm font-semibold text-[hsl(var(--foreground))]">
                       Trigger Node
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
                       Starts the workflow
                     </div>
                   </div>
@@ -663,11 +668,11 @@ export default function WorkflowBuilderPage() {
                     e.dataTransfer.setData("application/reactflow", "reaction");
                     e.dataTransfer.effectAllowed = "move";
                   }}
-                  className="flex items-center gap-3 p-3 rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 cursor-move hover:shadow-lg transition-all hover:scale-105"
+                  className="flex cursor-move items-center gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 transition-all hover:scale-[1.02] hover:border-emerald-400 hover:bg-[hsl(var(--accent))] hover:shadow-lg"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white dark:from-emerald-600 dark:to-teal-500">
                     <svg
-                      className="w-4 h-4 text-white"
+                      className="h-4 w-4 text-white"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -687,10 +692,10 @@ export default function WorkflowBuilderPage() {
                     </svg>
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-gray-900">
+                    <div className="text-sm font-semibold text-[hsl(var(--foreground))]">
                       Action Node
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
                       Performs an action
                     </div>
                   </div>
@@ -698,24 +703,24 @@ export default function WorkflowBuilderPage() {
               </div>
 
               <div className="space-y-3 pt-4">
-                <h3 className="text-sm font-semibold text-gray-700">
+                <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">
                   Available Services
                 </h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {services.length === 0 ? (
-                    <div className="text-sm text-gray-400 italic">
+                    <div className="text-sm italic text-[hsl(var(--muted-foreground))]">
                       Loading services...
                     </div>
                   ) : (
                     services.map((service) => (
                       <div
                         key={service.name}
-                        className="text-sm p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+                        className="rounded-lg border border-transparent bg-[hsl(var(--muted))] p-3 text-sm transition-colors hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--accent))]"
                       >
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-[hsl(var(--foreground))]">
                           {service.name}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                           {service.actions.length} triggers •{" "}
                           {service.reactions.length} actions
                         </div>
@@ -725,7 +730,7 @@ export default function WorkflowBuilderPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-200">
+              <div className="border-t border-[hsl(var(--border))] pt-4">
                 <Button
                   onClick={handleSave}
                   disabled={!workflowName.trim()}
@@ -740,7 +745,7 @@ export default function WorkflowBuilderPage() {
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="fixed left-4 top-24 z-20 bg-white rounded-lg p-3 shadow-lg hover:shadow-xl transition-all border border-gray-200"
+              className="fixed left-4 top-24 z-20 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 shadow-lg transition-all hover:shadow-xl"
               title="Open sidebar"
             >
               <svg
@@ -759,25 +764,28 @@ export default function WorkflowBuilderPage() {
             </button>
           )}
 
-          <div className="flex-1 relative">
-            <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-200 px-6 py-4">
-              <div className="flex items-center justify-between">
+          <div className="relative flex-1">
+            <div className="absolute left-0 right-0 top-0 z-10 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/90 px-6 py-4 backdrop-blur transition-colors supports-[backdrop-filter]:bg-[hsl(var(--background))]/75">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">
+                  <h1 className="text-2xl font-semibold text-[hsl(var(--foreground))]">
                     {workflowName || "Untitled Workflow"}
                   </h1>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
                     Drag nodes from the sidebar and connect them to build your
                     workflow
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push("/workflows")}
-                  className="bg-white"
-                >
-                  Back to Workflows
-                </Button>
+                <div className="flex items-center gap-3">
+                  <ThemeToggle className="h-10 w-10" />
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push("/workflows")}
+                    className="bg-[hsl(var(--background))]"
+                  >
+                    Back to Workflows
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -926,8 +934,8 @@ export default function WorkflowBuilderPage() {
 
                     if (inputKeys.length > 0) {
                       return (
-                        <div className="space-y-3 pt-3 border-t border-gray-200">
-                          <h4 className="text-sm font-semibold text-gray-700">
+                        <div className="space-y-3 border-t border-[hsl(var(--border))] pt-3">
+                          <h4 className="text-sm font-semibold text-[hsl(var(--foreground))]">
                             Parameters
                           </h4>
                           {inputKeys.map((key) => {
@@ -960,7 +968,7 @@ export default function WorkflowBuilderPage() {
                                     {label}
                                   </Label>
                                   {description && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
                                       {description}
                                     </p>
                                   )}
@@ -974,7 +982,7 @@ export default function WorkflowBuilderPage() {
                                       };
                                       updateSelectedNode({ params: newParams });
                                     }}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--background))]"
                                   >
                                     <option value="">{placeholder}</option>
                                     {options.map((opt) => (
@@ -986,7 +994,7 @@ export default function WorkflowBuilderPage() {
                                   </select>
                                   {options.find((opt) => opt.value === value)
                                     ?.description && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
                                       {
                                         options.find(
                                           (opt) => opt.value === value,
@@ -1010,7 +1018,7 @@ export default function WorkflowBuilderPage() {
                                         {label}
                                       </Label>
                                       {description && (
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
                                           {description}
                                         </p>
                                       )}
@@ -1045,7 +1053,7 @@ export default function WorkflowBuilderPage() {
                                     {label}
                                   </Label>
                                   {description && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
                                       {description}
                                     </p>
                                   )}
@@ -1076,7 +1084,7 @@ export default function WorkflowBuilderPage() {
                                     {label}
                                   </Label>
                                   {description && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
                                       {description}
                                     </p>
                                   )}
@@ -1092,12 +1100,11 @@ export default function WorkflowBuilderPage() {
                                     }}
                                     placeholder={placeholder}
                                     rows={4}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--background))]"
                                   />
-                                  {/* Render quick preset buttons if options are provided (generic for any textarea) */}
                                   {options && options.length > 0 && (
                                     <div className="mt-2">
-                                      <p className="text-xs text-gray-600 mb-1">
+                                      <p className="mb-1 text-xs text-[hsl(var(--muted-foreground))]">
                                         Quick presets:
                                       </p>
                                       <div className="flex flex-wrap gap-1">
@@ -1114,7 +1121,7 @@ export default function WorkflowBuilderPage() {
                                                 params: newParams,
                                               });
                                             }}
-                                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                                            className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
                                             title={opt.description}
                                           >
                                             {opt.label}
@@ -1136,7 +1143,7 @@ export default function WorkflowBuilderPage() {
                                   {label}
                                 </Label>
                                 {description && (
-                                  <p className="text-xs text-gray-500">
+                                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
                                     {description}
                                   </p>
                                 )}
@@ -1161,10 +1168,9 @@ export default function WorkflowBuilderPage() {
                                   }}
                                   placeholder={placeholder}
                                 />
-                                {/* Render quick preset buttons if options are provided (works for any input type) */}
                                 {options && options.length > 0 && (
                                   <div className="mt-2">
-                                    <p className="text-xs text-gray-600 mb-1">
+                                    <p className="mb-1 text-xs text-[hsl(var(--muted-foreground))]">
                                       Quick presets:
                                     </p>
                                     <div className="flex flex-wrap gap-1">
@@ -1181,7 +1187,7 @@ export default function WorkflowBuilderPage() {
                                               params: newParams,
                                             });
                                           }}
-                                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                                          className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
                                           title={opt.description}
                                         >
                                           {opt.label}
@@ -1200,7 +1206,7 @@ export default function WorkflowBuilderPage() {
                   })()}
                 </div>
 
-                <div className="flex gap-3 pt-4 border-t border-gray-200 justify-end">
+                <div className="flex justify-end gap-3 border-t border-[hsl(var(--border))] pt-4">
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -1225,12 +1231,12 @@ export default function WorkflowBuilderPage() {
           </Dialog>
 
           {!isMobile && error && (
-            <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg">
+            <div className="fixed bottom-4 right-4 rounded-lg bg-[hsl(var(--destructive))] px-4 py-3 text-sm font-medium text-[hsl(var(--destructive-foreground))] shadow-lg">
               {error}
             </div>
           )}
           {!isMobile && success && (
-            <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg">
+            <div className="fixed bottom-4 right-4 rounded-lg bg-[hsl(var(--primary))] px-4 py-3 text-sm font-medium text-[hsl(var(--primary-foreground))] shadow-lg">
               Workflow saved successfully!
             </div>
           )}
