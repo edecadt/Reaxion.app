@@ -1,4 +1,12 @@
-import { createService, createAction, createReaction } from "@area/sdk";
+import {
+  createService,
+  createAction,
+  createReaction,
+  cronInput,
+  numberInput,
+  textInput,
+  selectInput,
+} from "@area/sdk";
 import { CronExpressionParser } from "cron-parser";
 
 export default createService({
@@ -16,7 +24,59 @@ export default createService({
       name: "Cron",
       description:
         "Trigger based on a cron expression (e.g. */10 * * * * = every 10 minutes).",
-      input: { expression: "string" },
+      input: {
+        expression: cronInput({
+          label: "Cron Expression",
+          description:
+            "6-field cron expression: second minute hour day month weekday",
+          placeholder: "*/10 * * * * *",
+          validation: {
+            required: true,
+          },
+          options: [
+            {
+              label: "Every 10 seconds",
+              value: "*/10 * * * * *",
+              description: "Triggers every 10 seconds",
+            },
+            {
+              label: "Every minute",
+              value: "0 * * * * *",
+              description: "Triggers at the start of every minute",
+            },
+            {
+              label: "Every 5 minutes",
+              value: "0 */5 * * * *",
+              description: "Triggers every 5 minutes",
+            },
+            {
+              label: "Every hour",
+              value: "0 0 * * * *",
+              description: "Triggers at the start of every hour",
+            },
+            {
+              label: "Every day at midnight",
+              value: "0 0 0 * * *",
+              description: "Triggers at 00:00:00 every day",
+            },
+            {
+              label: "Every Monday at 9am",
+              value: "0 0 9 * * 1",
+              description: "Triggers at 09:00:00 every Monday",
+            },
+            {
+              label: "Every weekday at 9am",
+              value: "0 0 9 * * 1-5",
+              description: "Triggers at 09:00:00 Monday through Friday",
+            },
+            {
+              label: "First day of month",
+              value: "0 0 0 1 * *",
+              description: "Triggers at midnight on the 1st of every month",
+            },
+          ],
+        }),
+      },
       output: { triggered_at: "string" },
       run: async (params, ctx) => {
         const expr = params.expression as string;
@@ -57,7 +117,18 @@ export default createService({
       id: "wait",
       name: "Wait",
       description: "Pause workflow execution for N seconds",
-      input: { seconds: "number" },
+      input: {
+        seconds: numberInput({
+          label: "Seconds",
+          description: "Number of seconds to wait",
+          placeholder: "10",
+          min: 0,
+          validation: {
+            required: true,
+            min: 0,
+          },
+        }),
+      },
       output: { completed: "boolean", waited_seconds: "number" },
       run: async (params, ctx) => {
         const seconds = Number(params.seconds) || 0;
@@ -77,7 +148,46 @@ export default createService({
       id: "log",
       name: "Log Message",
       description: "Log a message to the console for testing",
-      input: { message: "string", level: "string" },
+      input: {
+        message: textInput({
+          label: "Message",
+          description: "Message to log",
+          placeholder: "Enter your message",
+          validation: {
+            required: true,
+          },
+        }),
+        level: selectInput(
+          [
+            {
+              label: "Info",
+              value: "info",
+              description: "Informational message",
+              icon: "ℹ️",
+              color: "#3b82f6",
+            },
+            {
+              label: "Warning",
+              value: "warn",
+              description: "Warning message",
+              icon: "⚠️",
+              color: "#f59e0b",
+            },
+            {
+              label: "Error",
+              value: "error",
+              description: "Error message",
+              icon: "❌",
+              color: "#ef4444",
+            },
+          ],
+          {
+            label: "Log Level",
+            description: "Severity level of the log message",
+            defaultValue: "info",
+          },
+        ),
+      },
       output: { logged: "boolean", message: "string" },
       run: async (params, ctx) => {
         const message = String(params.message) || "Test message";

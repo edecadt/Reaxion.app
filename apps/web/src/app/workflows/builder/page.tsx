@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import type { Workflow } from "@reaxion/common";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Node, Edge } from "reactflow";
+
 import { Button } from "../../../components/ui/button";
+import { Dialog } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
-import { WorkflowCanvas } from "../../../components/workflow-builder/WorkflowCanvas";
 import { MobileWorkflowBuilder } from "../../../components/workflow-builder/MobileWorkflowBuilder";
-import { getAuthToken } from "../../../lib/auth";
+import { WorkflowCanvas } from "../../../components/workflow-builder/WorkflowCanvas";
 import {
   createWorkflow,
   getAbout,
@@ -16,8 +18,56 @@ import {
   getWorkflows,
   updateWorkflow,
 } from "../../../lib/api";
-import { Dialog } from "../../../components/ui/dialog";
-import type { Workflow } from "@reaxion/common";
+import { getAuthToken } from "../../../lib/auth";
+
+type InputMetadata = {
+  type: string;
+  uiType?: string;
+  label?: string;
+  description?: string;
+  placeholder?: string;
+  defaultValue?: unknown;
+  options?: Array<{
+    label: string;
+    value: string | number;
+    description?: string;
+  }>;
+  validation?: Record<string, unknown>;
+};
+
+type InputDefinitionValue = string | InputMetadata;
+
+/**
+ * Helper function to extract input metadata from either old format (string) or new format (InputMetadata)
+ */
+function getInputMetadata(value: InputDefinitionValue): {
+  type: string;
+  uiType?: string;
+  label?: string;
+  description?: string;
+  placeholder?: string;
+  defaultValue?: unknown;
+  options?: Array<{
+    label: string;
+    value: string | number;
+    description?: string;
+    icon?: string;
+    color?: string;
+  }>;
+} {
+  if (typeof value === "string") {
+    return { type: value.toLowerCase() };
+  }
+  return {
+    type: value.type.toLowerCase(),
+    uiType: value.uiType,
+    label: value.label,
+    description: value.description,
+    placeholder: value.placeholder,
+    defaultValue: value.defaultValue,
+    options: value.options,
+  };
+}
 
 export default function WorkflowBuilderPage() {
   const router = useRouter();
@@ -180,11 +230,16 @@ export default function WorkflowBuilderPage() {
 
       const flowEdges: Edge[] = [];
       (workflow.nodes || []).forEach((node) => {
-        (node.next || []).forEach((targetId) => {
+        const nextNodes = Array.isArray(node.next)
+          ? node.next
+          : node.next
+            ? [node.next]
+            : [];
+        nextNodes.forEach((targetId) => {
           flowEdges.push({
             id: `${node.id}-${targetId}`,
             source: node.id,
-            target: targetId,
+            target: targetId as string,
             type: "smoothstep",
             animated: true,
           });
@@ -263,7 +318,7 @@ export default function WorkflowBuilderPage() {
     const rfInstance = reactFlowInstanceRef.current;
     const currentNodes = rfInstance.getNodes();
 
-    const updatedNodes = currentNodes.map((node) =>
+    const updatedNodes = currentNodes.map((node: Node) =>
       node.id === selectedNode.id
         ? { ...node, data: { ...selectedNode.data, onDeleteNode } }
         : node,
@@ -321,7 +376,7 @@ export default function WorkflowBuilderPage() {
       const currentNodes = rfInstance ? rfInstance.getNodes() : nodes;
       const currentEdges = rfInstance ? rfInstance.getEdges() : edges;
 
-      const workflowNodes = currentNodes.map((node) => {
+      const workflowNodes = currentNodes.map((node: Node) => {
         const customLabel =
           node.data.label &&
           node.data.label !== node.id &&
@@ -339,8 +394,8 @@ export default function WorkflowBuilderPage() {
           label: customLabel,
           position: node.position,
           next: currentEdges
-            .filter((edge) => edge.source === node.id)
-            .map((edge) => edge.target),
+            .filter((edge: Edge) => edge.source === node.id)
+            .map((edge: Edge) => edge.target),
         };
       });
 
@@ -374,13 +429,17 @@ export default function WorkflowBuilderPage() {
   const createEdgesFromNodes = useCallback((nodesList: Node[]): Edge[] => {
     const newEdges: Edge[] = [];
     for (let i = 0; i < nodesList.length - 1; i++) {
-      newEdges.push({
-        id: `${nodesList[i].id}-${nodesList[i + 1].id}`,
-        source: nodesList[i].id,
-        target: nodesList[i + 1].id,
-        type: "smoothstep",
-        animated: true,
-      });
+      const currentNode = nodesList[i];
+      const nextNode = nodesList[i + 1];
+      if (currentNode && nextNode) {
+        newEdges.push({
+          id: `${currentNode.id}-${nextNode.id}`,
+          source: currentNode.id,
+          target: nextNode.id,
+          type: "smoothstep",
+          animated: true,
+        });
+      }
     }
     return newEdges;
   }, []);
@@ -420,7 +479,6 @@ export default function WorkflowBuilderPage() {
 
   const handleMobileUpdateNodeConnections = useCallback(
     (nodeId: string, nextNodeIds: string[]) => {
-      // Update node's data.next field
       const updatedNodes = nodes.map((node) =>
         node.id === nodeId
           ? { ...node, data: { ...node.data, next: nextNodeIds } }
@@ -428,7 +486,6 @@ export default function WorkflowBuilderPage() {
       );
       setNodes(updatedNodes);
 
-      // Rebuild edges based on all node connections
       const newEdges: Edge[] = [];
       updatedNodes.forEach((node) => {
         const nextIds = Array.isArray(node.data.next)
@@ -437,7 +494,7 @@ export default function WorkflowBuilderPage() {
             ? [node.data.next]
             : [];
 
-        nextIds.forEach((targetId) => {
+        nextIds.forEach((targetId: string) => {
           newEdges.push({
             id: `${node.id}-${targetId}`,
             source: node.id,
@@ -884,7 +941,7 @@ export default function WorkflowBuilderPage() {
                           );
 
                     const inputDefinition = (actionOrReaction?.input ||
-                      {}) as Record<string, string>;
+                      {}) as Record<string, InputDefinitionValue>;
                     const inputKeys = Object.keys(inputDefinition);
 
                     if (inputKeys.length > 0) {
@@ -894,38 +951,106 @@ export default function WorkflowBuilderPage() {
                             Parameters
                           </h4>
                           {inputKeys.map((key) => {
-                            const type = (
-                              inputDefinition[key] || "string"
-                            ).toLowerCase();
+                            const inputMeta = getInputMetadata(
+                              inputDefinition[key] || "string",
+                            );
+                            const type = inputMeta.type;
+                            const uiType = inputMeta.uiType || type;
+                            const label = inputMeta.label || key;
+                            const description = inputMeta.description;
+                            const placeholder =
+                              inputMeta.placeholder || `Enter ${key}`;
+                            const options = inputMeta.options;
+
                             const params = (selectedNode.data.params ||
                               {}) as Record<string, unknown>;
                             const value = params[key];
 
-                            if (type === "boolean") {
+                            if (
+                              uiType === "select" &&
+                              options &&
+                              options.length > 0
+                            ) {
                               return (
-                                <div
-                                  key={key}
-                                  className="flex items-center justify-between py-2"
-                                >
+                                <div key={key} className="space-y-1">
                                   <Label
                                     htmlFor={`param-${key}`}
                                     className="text-sm font-medium"
                                   >
-                                    {key}
+                                    {label}
                                   </Label>
-                                  <input
+                                  {description && (
+                                    <p className="text-xs text-gray-500">
+                                      {description}
+                                    </p>
+                                  )}
+                                  <select
                                     id={`param-${key}`}
-                                    type="checkbox"
-                                    checked={Boolean(value)}
+                                    value={String(value ?? "")}
                                     onChange={(e) => {
                                       const newParams = {
                                         ...params,
-                                        [key]: e.target.checked,
+                                        [key]: e.target.value,
                                       };
                                       updateSelectedNode({ params: newParams });
                                     }}
-                                    className="h-4 w-4"
-                                  />
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    <option value="">{placeholder}</option>
+                                    {options.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>
+                                        {opt.icon ? `${opt.icon} ` : ""}
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {options.find((opt) => opt.value === value)
+                                    ?.description && (
+                                    <p className="text-xs text-gray-500">
+                                      {
+                                        options.find(
+                                          (opt) => opt.value === value,
+                                        )?.description
+                                      }
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            if (type === "boolean") {
+                              return (
+                                <div key={key} className="space-y-1">
+                                  <div className="flex items-center justify-between py-2">
+                                    <div className="flex-1">
+                                      <Label
+                                        htmlFor={`param-${key}`}
+                                        className="text-sm font-medium"
+                                      >
+                                        {label}
+                                      </Label>
+                                      {description && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                          {description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <input
+                                      id={`param-${key}`}
+                                      type="checkbox"
+                                      checked={Boolean(value)}
+                                      onChange={(e) => {
+                                        const newParams = {
+                                          ...params,
+                                          [key]: e.target.checked,
+                                        };
+                                        updateSelectedNode({
+                                          params: newParams,
+                                        });
+                                      }}
+                                      className="h-4 w-4 ml-2"
+                                    />
+                                  </div>
                                 </div>
                               );
                             }
@@ -937,8 +1062,13 @@ export default function WorkflowBuilderPage() {
                                     htmlFor={`param-${key}`}
                                     className="text-sm font-medium"
                                   >
-                                    {key}
+                                    {label}
                                   </Label>
+                                  {description && (
+                                    <p className="text-xs text-gray-500">
+                                      {description}
+                                    </p>
+                                  )}
                                   <Input
                                     id={`param-${key}`}
                                     type="number"
@@ -950,8 +1080,69 @@ export default function WorkflowBuilderPage() {
                                       };
                                       updateSelectedNode({ params: newParams });
                                     }}
-                                    placeholder={`Enter ${key}`}
+                                    placeholder={placeholder}
                                   />
+                                </div>
+                              );
+                            }
+
+                            if (uiType === "textarea") {
+                              return (
+                                <div key={key} className="space-y-1">
+                                  <Label
+                                    htmlFor={`param-${key}`}
+                                    className="text-sm font-medium"
+                                  >
+                                    {label}
+                                  </Label>
+                                  {description && (
+                                    <p className="text-xs text-gray-500">
+                                      {description}
+                                    </p>
+                                  )}
+                                  <textarea
+                                    id={`param-${key}`}
+                                    value={String(value ?? "")}
+                                    onChange={(e) => {
+                                      const newParams = {
+                                        ...params,
+                                        [key]: e.target.value,
+                                      };
+                                      updateSelectedNode({ params: newParams });
+                                    }}
+                                    placeholder={placeholder}
+                                    rows={4}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  {/* Render quick preset buttons if options are provided (generic for any textarea) */}
+                                  {options && options.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-gray-600 mb-1">
+                                        Quick presets:
+                                      </p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {options.map((opt) => (
+                                          <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                              const newParams = {
+                                                ...params,
+                                                [key]: opt.value,
+                                              };
+                                              updateSelectedNode({
+                                                params: newParams,
+                                              });
+                                            }}
+                                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                                            title={opt.description}
+                                          >
+                                            {opt.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             }
@@ -962,10 +1153,24 @@ export default function WorkflowBuilderPage() {
                                   htmlFor={`param-${key}`}
                                   className="text-sm font-medium"
                                 >
-                                  {key}
+                                  {label}
                                 </Label>
+                                {description && (
+                                  <p className="text-xs text-gray-500">
+                                    {description}
+                                  </p>
+                                )}
                                 <Input
                                   id={`param-${key}`}
+                                  type={
+                                    uiType === "password"
+                                      ? "password"
+                                      : uiType === "email"
+                                        ? "email"
+                                        : uiType === "url"
+                                          ? "url"
+                                          : "text"
+                                  }
                                   value={String(value ?? "")}
                                   onChange={(e) => {
                                     const newParams = {
@@ -974,8 +1179,37 @@ export default function WorkflowBuilderPage() {
                                     };
                                     updateSelectedNode({ params: newParams });
                                   }}
-                                  placeholder={`Enter ${key}`}
+                                  placeholder={placeholder}
                                 />
+                                {/* Render quick preset buttons if options are provided (works for any input type) */}
+                                {options && options.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-xs text-gray-600 mb-1">
+                                      Quick presets:
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {options.map((opt) => (
+                                        <button
+                                          key={opt.value}
+                                          type="button"
+                                          onClick={() => {
+                                            const newParams = {
+                                              ...params,
+                                              [key]: opt.value,
+                                            };
+                                            updateSelectedNode({
+                                              params: newParams,
+                                            });
+                                          }}
+                                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                                          title={opt.description}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

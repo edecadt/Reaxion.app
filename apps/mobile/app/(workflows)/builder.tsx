@@ -44,12 +44,10 @@ export default function MobileWorkflowBuilder() {
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Picker modal state
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [pickerNodeId, setPickerNodeId] = useState<string | null>(null);
 
-  // Load services
   useEffect(() => {
     const loadServices = async () => {
       setLoadingServices(true);
@@ -133,7 +131,6 @@ export default function MobileWorkflowBuilder() {
       return;
     }
 
-    // Validate nodes
     for (const node of nodes) {
       if (!node.data.serviceId) {
         toast.show(
@@ -171,7 +168,6 @@ export default function MobileWorkflowBuilder() {
             mappedNode.reactionId = node.data.reactionId;
           }
 
-          // Handle next - convert empty array to undefined
           if (node.data.next && node.data.next.length > 0) {
             mappedNode.next =
               node.data.next.length === 1 ? node.data.next[0] : node.data.next;
@@ -214,7 +210,6 @@ export default function MobileWorkflowBuilder() {
     return service?.reactions || [];
   };
 
-  // Render picker content
   const renderPickerContent = () => {
     if (!pickerNodeId || !pickerMode) return null;
 
@@ -430,7 +425,6 @@ export default function MobileWorkflowBuilder() {
             const nodeIsAction = isAction(node);
             const isExpanded = expandedNode === node.id;
 
-            // Get parameters for current action/reaction
             const actionOrReaction = nodeIsAction
               ? service?.actions.find((a) => a.name === node.data.actionId)
               : service?.reactions.find((r) => r.name === node.data.reactionId);
