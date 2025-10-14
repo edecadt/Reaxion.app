@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { register } from "../../src/lib/api";
 import { setAuthToken, setUser } from "../../src/lib/auth";
+import { useOAuth } from "../../src/lib/useOAuth";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const { signInWithGoogle, signInWithGitHub, googleLoading, githubLoading } =
+    useOAuth();
 
   const handleRegister = async () => {
     if (!email || !password) {
@@ -101,6 +104,35 @@ export default function RegisterScreen() {
               <Text style={styles.buttonText}>Create account</Text>
             )}
           </Pressable>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.oauthButtons}>
+            <Pressable
+              style={[
+                styles.oauthButton,
+                googleLoading && styles.buttonDisabled,
+              ]}
+              onPress={signInWithGoogle}
+              disabled={googleLoading || loading}
+            >
+              <Text style={styles.oauthButtonText}>Google</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.oauthButton,
+                githubLoading && styles.buttonDisabled,
+              ]}
+              onPress={signInWithGitHub}
+              disabled={githubLoading || loading}
+            >
+              <Text style={styles.oauthButtonText}>GitHub</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
@@ -194,5 +226,40 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#111827",
     textDecorationLine: "underline",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#d1d5db",
+  },
+  dividerText: {
+    paddingHorizontal: 12,
+    fontSize: 12,
+    color: "#6b7280",
+    textTransform: "uppercase",
+  },
+  oauthButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  oauthButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#fff",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  oauthButtonText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

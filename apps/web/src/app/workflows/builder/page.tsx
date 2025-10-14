@@ -180,7 +180,8 @@ export default function WorkflowBuilderPage() {
 
       const flowEdges: Edge[] = [];
       (workflow.nodes || []).forEach((node) => {
-        (node.next || []).forEach((targetId) => {
+        const nextIds = Array.isArray(node.next) ? node.next : [];
+        nextIds.forEach((targetId) => {
           flowEdges.push({
             id: `${node.id}-${targetId}`,
             source: node.id,

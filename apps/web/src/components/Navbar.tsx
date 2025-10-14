@@ -14,7 +14,25 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
+    // Initial load
     setUser(getUser());
+
+    // Listen for storage events (when token is set in another tab/page)
+    const handleStorageChange = () => {
+      setUser(getUser());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Also check periodically in case storage event doesn't fire
+    const interval = setInterval(() => {
+      setUser(getUser());
+    }, 1000);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const logout = () => {
