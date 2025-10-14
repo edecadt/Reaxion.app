@@ -2,9 +2,14 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -25,6 +30,8 @@ import {
   RegisterDto,
   ResetPasswordDto,
 } from './dto';
+import { AuthGuard } from '@nestjs/passport';
+import type { Request, Response } from 'express';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -121,5 +128,59 @@ export class AuthController {
     }
     const result = await this.auth.resetPassword(token, password);
     return result;
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  async googleAuth() {}
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
+    const user = req.user as any;
+    const result = await this.auth.validateOAuthLogin(user);
+
+    const redirectUri = (req as any).session.oauth_redirect_uri || null;
+
+    if (redirectUri) {
+      delete (req as any).session.oauth_redirect_uri;
+    }
+
+    if (redirectUri && redirectUri.startsWith('reaxion://')) {
+      const webCallbackUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/callback?token=${result.token}&mobile_redirect=${encodeURIComponent(redirectUri)}`;
+      res.redirect(webCallbackUrl);
+    } else {
+      const defaultRedirect = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/callback?token=${result.token}`;
+      res.redirect(redirectUri || defaultRedirect);
+    }
+  }
+
+  @Get('github')
+  @UseGuards(AuthGuard('github'))
+  @ApiOperation({ summary: 'Initiate GitHub OAuth login' })
+  async githubAuth() {}
+
+  @Get('github/callback')
+  @UseGuards(AuthGuard('github'))
+  @ApiOperation({ summary: 'GitHub OAuth callback' })
+  async githubAuthCallback(@Req() req: Request, @Res() res: Response) {
+    const user = req.user as any;
+    const result = await this.auth.validateOAuthLogin(user);
+
+    const redirectUri = (req as any).session.oauth_redirect_uri || null;
+
+    if (redirectUri) {
+      delete (req as any).session.oauth_redirect_uri;
+    }
+
+    if (redirectUri && redirectUri.startsWith('reaxion://')) {
+      const webCallbackUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/callback?token=${result.token}&mobile_redirect=${encodeURIComponent(redirectUri)}`;
+      res.redirect(webCallbackUrl);
+    } else {
+      const defaultRedirect = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/callback?token=${result.token}`;
+      res.redirect(redirectUri || defaultRedirect);
+    }
   }
 }

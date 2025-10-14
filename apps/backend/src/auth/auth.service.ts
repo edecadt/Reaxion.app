@@ -64,7 +64,11 @@ export class AuthService {
       },
     });
 
-    const token = this.signJwt({ sub: user.id, email: user.email });
+    const token = this.signJwt({
+      sub: user.id,
+      email: user.email,
+      name: user.name ?? null,
+    });
 
     return {
       token,
@@ -92,7 +96,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = this.signJwt({ sub: user.id, email: user.email });
+    const token = this.signJwt({
+      sub: user.id,
+      email: user.email,
+      name: user.name ?? null,
+    });
 
     return {
       token,
@@ -225,5 +233,49 @@ export class AuthService {
     });
 
     return { message: 'Password reset successfully' };
+  }
+
+  async validateOAuthLogin(oauthUser: {
+    email: string;
+    name: string;
+    picture?: string;
+    provider: string;
+  }): Promise<AuthResult> {
+    const email = oauthUser.email.trim().toLowerCase();
+
+    let user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: oauthUser.name,
+          passwordHash: '',
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
+    }
+
+    const token = this.signJwt({
+      sub: user.id,
+      email: user.email,
+      name: user.name ?? null,
+    });
+
+    return {
+      token,
+      user: { id: user.id, email: user.email, name: user.name ?? null },
+    };
   }
 }
