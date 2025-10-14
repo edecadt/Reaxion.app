@@ -62,6 +62,11 @@ export default function Home() {
               <Text style={styles.primaryButtonText}>Créer un workflow</Text>
             </Pressable>
           </Link>
+          <Link href="/(settings)/settings" asChild>
+            <Pressable style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Service Connections</Text>
+            </Pressable>
+          </Link>
           <Pressable style={styles.secondaryButton} onPress={logout}>
             <Text style={styles.secondaryButtonText}>Logout</Text>
           </Pressable>

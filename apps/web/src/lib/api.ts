@@ -296,6 +296,21 @@ export async function getServiceConnection(
   );
 }
 
+export async function connectWithApiKey(
+  serviceId: string,
+  apiKey: string,
+  token: string,
+): Promise<ServiceConnection> {
+  return await request<ServiceConnection>(
+    "POST",
+    "/api/service-auth/connect/api-key",
+    {
+      body: { serviceId, apiKey },
+      token,
+    },
+  );
+}
+
 export async function disconnectService(
   serviceId: string,
   token: string,
