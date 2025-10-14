@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 export function createAction<
-  TInput extends ParameterSchema = ParameterSchema,
+  TInput extends Record<string, any> = Record<string, any>,
   TOutput extends ParameterSchema = ParameterSchema,
 >(
   definition: ActionDefinition<TInput, TOutput>,
@@ -33,7 +33,7 @@ export function createAction<
 }
 
 export function createReaction<
-  TInput extends ParameterSchema = ParameterSchema,
+  TInput extends Record<string, any> = Record<string, any>,
   TOutput extends ParameterSchema = ParameterSchema,
 >(
   definition: ReactionDefinition<TInput, TOutput>,

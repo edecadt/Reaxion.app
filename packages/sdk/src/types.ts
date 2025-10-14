@@ -1,7 +1,61 @@
-export type ParameterSchema = Record<
+export type ParameterType = "string" | "number" | "boolean" | "object";
+
+export type InputUIType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "select"
+  | "multiselect"
+  | "boolean"
+  | "date"
+  | "time"
+  | "datetime"
+  | "url"
+  | "email"
+  | "password"
+  | "color";
+
+export type SelectOption = {
+  label: string;
+  value: string | number;
+  description?: string;
+  icon?: string;
+  color?: string;
+  disabled?: boolean;
+};
+
+export type InputValidation = {
+  required?: boolean;
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  custom?: (value: unknown) => string | null;
+};
+
+export type InputMetadata = {
+  type: ParameterType;
+  uiType?: InputUIType;
+  label?: string;
+  description?: string;
+  placeholder?: string;
+  defaultValue?: unknown;
+  options?: SelectOption[];
+  validation?: InputValidation;
+  hidden?: boolean;
+  disabled?: boolean;
+  dependsOn?: string;
+};
+
+export type ParameterSchema = Record<string, ParameterType>;
+
+export type EnhancedParameterSchema = Record<
   string,
-  "string" | "number" | "boolean" | "object"
+  InputMetadata | ParameterType
 >;
+
+export type InputSchema = ParameterSchema | EnhancedParameterSchema;
 
 export type ServiceContext = {
   serviceId: string;
@@ -88,7 +142,10 @@ export type WebhookContext = ServiceContext & {
 };
 
 export type ActionDefinition<
-  TInput extends ParameterSchema = ParameterSchema,
+  TInput extends Record<string, any> = Record<
+    string,
+    ParameterType | InputMetadata
+  >,
   TOutput extends ParameterSchema = ParameterSchema,
 > = {
   id: string;
@@ -97,16 +154,16 @@ export type ActionDefinition<
   input?: TInput;
   output?: TOutput;
   run: (
-    params: Record<keyof TInput, unknown>,
+    params: Record<string, unknown>,
     ctx: ActionContext,
-  ) =>
-    | Promise<Record<keyof TOutput, unknown> | null>
-    | Record<keyof TOutput, unknown>
-    | null;
+  ) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
 };
 
 export type ReactionDefinition<
-  TInput extends ParameterSchema = ParameterSchema,
+  TInput extends Record<string, any> = Record<
+    string,
+    ParameterType | InputMetadata
+  >,
   TOutput extends ParameterSchema = ParameterSchema,
 > = {
   id: string;
@@ -115,9 +172,9 @@ export type ReactionDefinition<
   input?: TInput;
   output?: TOutput;
   run: (
-    params: Record<keyof TInput, unknown>,
+    params: Record<string, unknown>,
     ctx: ReactionContext,
-  ) => Promise<Record<keyof TOutput, unknown>> | Record<keyof TOutput, unknown>;
+  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
 };
 
 export type WebhookDefinition<

@@ -1,4 +1,4 @@
-import { createAction, createService, createWebhook } from "@area/sdk";
+import { createAction, createService, createWebhook, textInput } from "@area/sdk";
 
 const SERVICE_ID = "github";
 const ISSUES_WEBHOOK_ID = "issues";
@@ -91,8 +91,16 @@ export default createService({
       description:
         "Triggers when a new issue is opened on the specified repository.",
       input: {
-        owner: "string",
-        repo: "string",
+        owner: textInput({
+          label: "Repository Owner",
+          description: "GitHub username or organization name (leave empty for any)",
+          placeholder: "octocat",
+        }),
+        repo: textInput({
+          label: "Repository Name",
+          description: "Repository name (leave empty for any)",
+          placeholder: "hello-world",
+        }),
       },
       output: {
         issue_number: "number",

@@ -48,21 +48,23 @@ export function MobileWorkflowBuilder({
   const moveNodeUp = (index: number) => {
     if (index === 0) return;
     const newNodes = [...nodes];
-    [newNodes[index - 1], newNodes[index]] = [
-      newNodes[index],
-      newNodes[index - 1],
-    ];
-    onNodesChange(newNodes);
+    const temp = newNodes[index - 1];
+    if (temp && newNodes[index]) {
+      newNodes[index - 1] = newNodes[index];
+      newNodes[index] = temp;
+      onNodesChange(newNodes);
+    }
   };
 
   const moveNodeDown = (index: number) => {
     if (index === nodes.length - 1) return;
     const newNodes = [...nodes];
-    [newNodes[index], newNodes[index + 1]] = [
-      newNodes[index + 1],
-      newNodes[index],
-    ];
-    onNodesChange(newNodes);
+    const temp = newNodes[index + 1];
+    if (temp && newNodes[index]) {
+      newNodes[index + 1] = newNodes[index];
+      newNodes[index] = temp;
+      onNodesChange(newNodes);
+    }
   };
 
   return (
@@ -406,7 +408,7 @@ export function MobileWorkflowBuilder({
                                       newNext = [...currentNext, targetNode.id];
                                     } else {
                                       newNext = currentNext.filter(
-                                        (id) => id !== targetNode.id,
+                                        (id: string) => id !== targetNode.id,
                                       );
                                     }
 

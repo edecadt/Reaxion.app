@@ -1,4 +1,9 @@
-import { createReaction, createService } from "@area/sdk";
+import {
+  createReaction,
+  createService,
+  urlInput,
+  textInput,
+} from "@area/sdk";
 
 const SERVICE_ID = "discord";
 const WEBHOOK_REACTION_ID = "send-webhook-message";
@@ -80,10 +85,33 @@ export default createService({
       name: "Send Webhook Message",
       description: "Send a text message to a Discord channel via webhook URL.",
       input: {
-        webhookUrl: "string",
-        content: "string",
-        username: "string",
-        avatarUrl: "string",
+        webhookUrl: urlInput({
+          label: "Webhook URL",
+          description: "Discord webhook URL to send the message to",
+          placeholder: "https://discord.com/api/webhooks/...",
+          validation: {
+            required: true,
+          },
+        }),
+        content: textInput({
+          label: "Message Content",
+          description: "The message to send (max 2000 characters)",
+          placeholder: "Enter your message",
+          multiline: true,
+          validation: {
+            maxLength: 2000,
+          },
+        }),
+        username: textInput({
+          label: "Username (Optional)",
+          description: "Override the default webhook username",
+          placeholder: "Custom Bot Name",
+        }),
+        avatarUrl: urlInput({
+          label: "Avatar URL (Optional)",
+          description: "Override the default webhook avatar",
+          placeholder: "https://example.com/avatar.png",
+        }),
       },
       output: {
         delivered: "boolean",
