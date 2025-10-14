@@ -848,10 +848,16 @@ export default function WorkflowBuilderPage() {
                     </Label>
                     <SearchableSelect
                       ariaLabel="Select service"
-                      options={services.map((s) => ({
-                        label: s.name,
-                        value: s.name,
-                      }))}
+                      options={services
+                        .filter((s) =>
+                          selectedNode.type === "action"
+                            ? s.actions.length > 0
+                            : s.reactions.length > 0,
+                        )
+                        .map((s) => ({
+                          label: s.name,
+                          value: s.name,
+                        }))}
                       value={selectedNode.data.serviceId || ""}
                       onChange={(val) =>
                         updateSelectedNode({

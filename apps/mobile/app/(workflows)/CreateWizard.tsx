@@ -582,7 +582,7 @@ export default function CreateWorkflowWizard() {
                   title="Déclencheurs"
                   emptyCta="Ajoutez un déclencheur pour initier votre workflow."
                   nodes={triggerNodes}
-                  services={services}
+                  services={services.filter((s) => s.actions.length > 0)}
                   onRemove={removeNode}
                   onSelectService={(nodeId, serviceId) =>
                     actions.updateNode(nodeId, {
@@ -608,9 +608,9 @@ export default function CreateWorkflowWizard() {
 
                 <NodeSection
                   title="Réactions"
-                  emptyCta="Ajoutez une réaction pour prolonger l’expérience."
+                  emptyCta="Ajoutez une réaction pour prolonger l'expérience."
                   nodes={reactionNodes}
-                  services={services}
+                  services={services.filter((s) => s.reactions.length > 0)}
                   onRemove={removeNode}
                   onSelectService={(nodeId, serviceId) =>
                     actions.updateNode(nodeId, {

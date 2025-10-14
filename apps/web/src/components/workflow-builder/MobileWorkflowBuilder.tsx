@@ -200,11 +200,17 @@ export function MobileWorkflowBuilder({
                         }
                       >
                         <option value="">Select service</option>
-                        {services.map((service) => (
-                          <option key={service.name} value={service.name}>
-                            {service.name}
-                          </option>
-                        ))}
+                        {services
+                          .filter((service) =>
+                            nodeIsAction
+                              ? service.actions.length > 0
+                              : service.reactions.length > 0,
+                          )
+                          .map((service) => (
+                            <option key={service.name} value={service.name}>
+                              {service.name}
+                            </option>
+                          ))}
                       </select>
                     </div>
 

@@ -215,9 +215,16 @@ export default function MobileWorkflowBuilder() {
     if (!node) return null;
 
     if (pickerMode === "service") {
+      const nodeIsAction = isAction(node);
+      const filteredServices = services.filter((service) =>
+        nodeIsAction
+          ? service.actions.length > 0
+          : service.reactions.length > 0,
+      );
+
       return (
         <ScrollView style={styles.pickerScroll}>
-          {services.map((service) => (
+          {filteredServices.map((service) => (
             <Pressable
               key={service.name}
               style={[

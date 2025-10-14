@@ -20,7 +20,7 @@ export default createService({
 
   actions: [
     createAction({
-      id: "cron",
+      id: "Cron",
       name: "Cron",
       description:
         "Trigger based on a cron expression (e.g. */10 * * * * = every 10 minutes).",

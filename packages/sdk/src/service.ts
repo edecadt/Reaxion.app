@@ -6,7 +6,8 @@ import type {
   ActionContext,
   ReactionContext,
   WebhookContext,
-  ParameterSchema,
+  InputMetadata,
+  ParameterType,
 } from "./types";
 
 function normalizeAuthConfig(
@@ -40,12 +41,20 @@ function normalizeAuthConfig(
 }
 
 function convertParameterSchema(
-  schema: ParameterSchema = {},
+  schema?: Record<string, ParameterType | InputMetadata>,
 ): Record<string, unknown> {
+  if (!schema) {
+    return {};
+  }
+
   const result: Record<string, unknown> = {};
 
-  for (const [key, type] of Object.entries(schema)) {
-    result[key] = type;
+  for (const [key, value] of Object.entries(schema)) {
+    if (typeof value === "object" && value !== null && "type" in value) {
+      result[key] = value;
+    } else {
+      result[key] = value;
+    }
   }
 
   return result;
@@ -137,6 +146,50 @@ export function createService(definition: ServiceDefinition): CreatedService {
     },
 
     getHandler(): ServiceHandler {
+      const findAction = (identifier: string) => {
+        const trimmed = identifier.trim();
+        const normalized = trimmed.toLowerCase();
+
+        for (const action of actions) {
+          if (action.id === trimmed || action.name === trimmed) {
+            return action;
+          }
+        }
+
+        for (const action of actions) {
+          if (
+            action.id.toLowerCase() === normalized ||
+            action.name.toLowerCase() === normalized
+          ) {
+            return action;
+          }
+        }
+
+        return undefined;
+      };
+
+      const findReaction = (identifier: string) => {
+        const trimmed = identifier.trim();
+        const normalized = trimmed.toLowerCase();
+
+        for (const reaction of reactions) {
+          if (reaction.id === trimmed || reaction.name === trimmed) {
+            return reaction;
+          }
+        }
+
+        for (const reaction of reactions) {
+          if (
+            reaction.id.toLowerCase() === normalized ||
+            reaction.name.toLowerCase() === normalized
+          ) {
+            return reaction;
+          }
+        }
+
+        return undefined;
+      };
+
       return {
         onConnect: definition.onConnect,
         onDisconnect: definition.onDisconnect,
@@ -146,7 +199,7 @@ export function createService(definition: ServiceDefinition): CreatedService {
           params: Record<string, unknown>,
           ctx: ActionContext,
         ) {
-          const action = actions.find((a) => a.id === actionId);
+          const action = findAction(actionId);
           if (!action) {
             throw new Error(`Action not found: ${actionId}`);
           }
@@ -168,7 +221,7 @@ export function createService(definition: ServiceDefinition): CreatedService {
           params: Record<string, unknown>,
           ctx: ReactionContext,
         ) {
-          const reaction = reactions.find((r) => r.id === reactionId);
+          const reaction = findReaction(reactionId);
           if (!reaction) {
             throw new Error(`Reaction not found: ${reactionId}`);
           }
