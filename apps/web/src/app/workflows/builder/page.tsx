@@ -6,6 +6,7 @@ import type { Node, Edge } from "reactflow";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
+import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { WorkflowCanvas } from "../../../components/workflow-builder/WorkflowCanvas";
 import { MobileWorkflowBuilder } from "../../../components/workflow-builder/MobileWorkflowBuilder";
 import { getAuthToken } from "../../../lib/auth";
@@ -784,26 +785,23 @@ export default function WorkflowBuilderPage() {
                     >
                       Service
                     </Label>
-                    <select
-                      id="node-service"
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    <SearchableSelect
+                      ariaLabel="Select service"
+                      options={services.map((s) => ({
+                        label: s.name,
+                        value: s.name,
+                      }))}
                       value={selectedNode.data.serviceId || ""}
-                      onChange={(e) => {
+                      onChange={(val) =>
                         updateSelectedNode({
-                          serviceId: e.target.value,
+                          serviceId: val,
                           actionId: undefined,
                           reactionId: undefined,
                           params: {},
-                        });
-                      }}
-                    >
-                      <option value="">Select service</option>
-                      {services.map((service) => (
-                        <option key={service.name} value={service.name}>
-                          {service.name}
-                        </option>
-                      ))}
-                    </select>
+                        })
+                      }
+                      placeholder="Select service"
+                    />
                   </div>
 
                   {selectedNode.type === "action" &&
@@ -815,26 +813,19 @@ export default function WorkflowBuilderPage() {
                         >
                           Action
                         </Label>
-                        <select
-                          id="node-action"
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        <SearchableSelect
+                          ariaLabel="Select action"
+                          options={(
+                            services.find(
+                              (s) => s.name === selectedNode.data.serviceId,
+                            )?.actions || []
+                          ).map((a) => ({ label: a.name, value: a.name }))}
                           value={selectedNode.data.actionId || ""}
-                          onChange={(e) => {
-                            updateSelectedNode({
-                              actionId: e.target.value,
-                              params: {},
-                            });
-                          }}
-                        >
-                          <option value="">Select action</option>
-                          {services
-                            .find((s) => s.name === selectedNode.data.serviceId)
-                            ?.actions.map((action) => (
-                              <option key={action.name} value={action.name}>
-                                {action.name}
-                              </option>
-                            ))}
-                        </select>
+                          onChange={(val) =>
+                            updateSelectedNode({ actionId: val, params: {} })
+                          }
+                          placeholder="Select action"
+                        />
                       </div>
                     )}
 
@@ -847,26 +838,19 @@ export default function WorkflowBuilderPage() {
                         >
                           Reaction
                         </Label>
-                        <select
-                          id="node-reaction"
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        <SearchableSelect
+                          ariaLabel="Select reaction"
+                          options={(
+                            services.find(
+                              (s) => s.name === selectedNode.data.serviceId,
+                            )?.reactions || []
+                          ).map((r) => ({ label: r.name, value: r.name }))}
                           value={selectedNode.data.reactionId || ""}
-                          onChange={(e) => {
-                            updateSelectedNode({
-                              reactionId: e.target.value,
-                              params: {},
-                            });
-                          }}
-                        >
-                          <option value="">Select reaction</option>
-                          {services
-                            .find((s) => s.name === selectedNode.data.serviceId)
-                            ?.reactions.map((reaction) => (
-                              <option key={reaction.name} value={reaction.name}>
-                                {reaction.name}
-                              </option>
-                            ))}
-                        </select>
+                          onChange={(val) =>
+                            updateSelectedNode({ reactionId: val, params: {} })
+                          }
+                          placeholder="Select reaction"
+                        />
                       </div>
                     )}
 
