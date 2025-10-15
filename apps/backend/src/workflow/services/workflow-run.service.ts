@@ -327,8 +327,13 @@ export class WorkflowRunService {
       const refreshedConnection =
         await this.serviceAuthService.refreshOAuth2TokenIfNeeded(connection);
 
+      const accessToken =
+        refreshedConnection.authType === 'api_key'
+          ? (refreshedConnection.apiKey ?? undefined)
+          : (refreshedConnection.accessToken ?? undefined);
+
       return {
-        accessToken: refreshedConnection.accessToken ?? undefined,
+        accessToken,
         refreshToken: refreshedConnection.refreshToken ?? undefined,
         expiresAt: refreshedConnection.expiresAt ?? undefined,
         scopes: refreshedConnection.scopes,

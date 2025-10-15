@@ -14,14 +14,19 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import {
+  connectWithApiKey,
   disconnectService,
   getAbout,
   getOAuth2ConnectUrl,
   getServiceConnections,
   type AboutService,
+  type AboutServiceAuth,
   type ServiceConnection,
 } from "../../lib/api";
 import { getAuthToken } from "../../lib/auth";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Dialog } from "../../components/ui/dialog";
 
 type ServiceWithConnection = AboutService & {
   connection?: ServiceConnection;
@@ -37,6 +42,10 @@ function SettingsContent() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [busyServiceId, setBusyServiceId] = useState<string | null>(null);
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [selectedService, setSelectedService] =
+    useState<ServiceWithConnection | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState("");
 
   useEffect(() => {
     setToken(getAuthToken());
@@ -108,65 +117,109 @@ function SettingsContent() {
   }, [loadData]);
 
   const handleConnect = useCallback(
-    async (serviceId: string) => {
+    async (service: ServiceWithConnection) => {
       if (!token) return;
 
-      setBusyServiceId(serviceId);
-      setError(null);
+      const serviceId = service.id || service.name;
+      const auth = service.auth as AboutServiceAuth | undefined;
 
-      try {
-        const response = await fetch(getOAuth2ConnectUrl(serviceId), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          method: "GET",
-        });
+      if (!auth) {
+        setError("Service authentication not configured");
+        return;
+      }
 
-        let payload: unknown;
+      if (auth.type === "api_key") {
+        setSelectedService(service);
+        setApiKeyInput("");
+        setApiKeyDialogOpen(true);
+        return;
+      }
+
+      if (auth.type === "oauth2") {
+        setBusyServiceId(serviceId);
+        setError(null);
+
         try {
-          payload = await response.json();
-        } catch {
-          payload = await response.text();
-        }
+          const response = await fetch(getOAuth2ConnectUrl(serviceId), {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+            method: "GET",
+          });
 
-        if (!response.ok) {
-          const message =
-            (payload &&
-            typeof payload === "object" &&
-            "message" in (payload as Record<string, unknown>)
-              ? String((payload as Record<string, unknown>).message)
-              : typeof payload === "string"
-                ? payload
-                : "Failed to connect") || "Failed to connect";
-          throw new Error(message);
-        }
+          let payload: unknown;
+          try {
+            payload = await response.json();
+          } catch {
+            payload = await response.text();
+          }
 
-        if (
-          !payload ||
-          typeof payload !== "object" ||
-          Array.isArray(payload) ||
-          typeof (payload as { authorizationUrl?: unknown })
-            .authorizationUrl !== "string"
-        ) {
-          throw new Error("Missing authorization URL in response");
-        }
+          if (!response.ok) {
+            const message =
+              (payload &&
+              typeof payload === "object" &&
+              "message" in (payload as Record<string, unknown>)
+                ? String((payload as Record<string, unknown>).message)
+                : typeof payload === "string"
+                  ? payload
+                  : "Failed to connect") || "Failed to connect";
+            throw new Error(message);
+          }
 
-        window.location.href = (
-          payload as { authorizationUrl: string }
-        ).authorizationUrl;
-      } catch (fetchError) {
-        setError(
-          fetchError instanceof Error
-            ? fetchError.message
-            : "Failed to initiate connection",
-        );
-      } finally {
-        setBusyServiceId(null);
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            Array.isArray(payload) ||
+            typeof (payload as { authorizationUrl?: unknown })
+              .authorizationUrl !== "string"
+          ) {
+            throw new Error("Missing authorization URL in response");
+          }
+
+          window.location.href = (
+            payload as { authorizationUrl: string }
+          ).authorizationUrl;
+        } catch (fetchError) {
+          setError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Failed to initiate connection",
+          );
+        } finally {
+          setBusyServiceId(null);
+        }
       }
     },
     [token],
   );
+
+  const handleApiKeySubmit = useCallback(async () => {
+    if (!token || !selectedService || !apiKeyInput.trim()) {
+      setError("Please enter an API key");
+      return;
+    }
+
+    const serviceId = selectedService.id || selectedService.name;
+    setBusyServiceId(serviceId);
+    setError(null);
+
+    try {
+      await connectWithApiKey(serviceId, apiKeyInput.trim(), token);
+      setSuccessMessage(`Successfully connected to ${selectedService.name}!`);
+      setApiKeyDialogOpen(false);
+      setApiKeyInput("");
+      setSelectedService(null);
+      await loadData();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to connect service",
+      );
+    } finally {
+      setBusyServiceId(null);
+    }
+  }, [token, selectedService, apiKeyInput, loadData]);
 
   const handleDisconnect = useCallback(
     async (serviceId: string) => {
@@ -295,9 +348,7 @@ function SettingsContent() {
                     {service.connection?.isExpired && (
                       <Button
                         size="sm"
-                        onClick={() =>
-                          handleConnect(service.id || service.name)
-                        }
+                        onClick={() => handleConnect(service)}
                         disabled={
                           busyServiceId === (service.id || service.name)
                         }
@@ -323,7 +374,7 @@ function SettingsContent() {
                 ) : (
                   <Button
                     size="sm"
-                    onClick={() => handleConnect(service.id || service.name)}
+                    onClick={() => handleConnect(service)}
                     disabled={busyServiceId === (service.id || service.name)}
                     className="w-full"
                   >
@@ -343,6 +394,59 @@ function SettingsContent() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={apiKeyDialogOpen}
+        onClose={() => {
+          setApiKeyDialogOpen(false);
+          setApiKeyInput("");
+        }}
+        title={`Connect ${selectedService?.name || ""}`}
+      >
+        <div className="space-y-4">
+          {selectedService?.auth &&
+            (selectedService.auth as AboutServiceAuth).type === "api_key" &&
+            (selectedService.auth as AboutServiceAuth).description && (
+              <p className="text-sm text-muted-foreground">
+                {(selectedService.auth as AboutServiceAuth).description}
+              </p>
+            )}
+
+          <div className="space-y-2">
+            <Label htmlFor="apiKey">API Key</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              placeholder="Enter your API key"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleApiKeySubmit();
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setApiKeyDialogOpen(false);
+                setApiKeyInput("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleApiKeySubmit()}
+              disabled={!apiKeyInput.trim() || !!busyServiceId}
+            >
+              {busyServiceId ? "Connecting..." : "Connect"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
