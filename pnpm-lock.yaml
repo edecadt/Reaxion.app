@@ -453,6 +453,21 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
 
+  services/javascript:
+    dependencies:
+      "@area/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
+  services/openai:
+    dependencies:
+      "@area/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      openai:
+        specifier: ^4.77.3
+        version: 4.104.0(ws@8.18.3)(zod@4.1.12)
+
   services/telegram:
     dependencies:
       "@area/sdk":
