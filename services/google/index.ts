@@ -209,6 +209,9 @@ export default createService({
       prompt: 'consent',
       include_granted_scopes: 'true',
     },
+    tokenParams: {
+      access_type: 'offline',
+    },
   },
   onConnect: async (ctx) => {
     if (!ctx.connection?.accessToken) {
@@ -262,10 +265,6 @@ export default createService({
         const accessToken = ctx.connection?.accessToken;
 
         if (!accessToken) {
-          ctx.logger?.warn?.(
-            '[google] Missing access token for Gmail trigger',
-            'GoogleService',
-          );
           return null;
         }
 
