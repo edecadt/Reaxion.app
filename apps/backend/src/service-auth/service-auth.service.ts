@@ -66,6 +66,8 @@ export class ServiceAuthService {
     tokenResponse: OAuth2TokenResponse,
     requestedScopes: string[],
   ): Promise<ServiceConnection> {
+    const existingConnection = await this.getConnection(userId, serviceId);
+
     const expiresAt = tokenResponse.expires_in
       ? new Date(Date.now() + tokenResponse.expires_in * 1000)
       : null;
@@ -74,10 +76,28 @@ export class ServiceAuthService {
       ? tokenResponse.scope.split(' ')
       : requestedScopes;
 
+    const hasRefreshTokenField = Object.prototype.hasOwnProperty.call(
+      tokenResponse,
+      'refresh_token',
+    );
+
+    let refreshToken: string | null = existingConnection?.refreshToken ?? null;
+
+    if (hasRefreshTokenField) {
+      const providedRefreshToken = tokenResponse.refresh_token;
+
+      if (typeof providedRefreshToken === 'string') {
+        refreshToken =
+          providedRefreshToken.length > 0 ? providedRefreshToken : refreshToken;
+      } else if (providedRefreshToken === null) {
+        refreshToken = null;
+      }
+    }
+
     const data = {
       authType: 'oauth2',
       accessToken: tokenResponse.access_token,
-      refreshToken: tokenResponse.refresh_token ?? null,
+      refreshToken,
       expiresAt,
       scopes,
       metadata: {},
@@ -148,9 +168,6 @@ export class ServiceAuthService {
     }
 
     if (!connection.refreshToken) {
-      this.logger.warn(
-        `OAuth2 token expired but no refresh token available for service ${connection.serviceId}`,
-      );
       throw new BadRequestException(
         'OAuth2 token expired and no refresh token available. Please reconnect.',
       );

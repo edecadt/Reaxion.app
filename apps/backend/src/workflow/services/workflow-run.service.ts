@@ -340,9 +340,15 @@ export class WorkflowRunService {
         metadata: refreshedConnection.metadata as Record<string, unknown>,
       };
     } catch (error) {
-      this.logger.warn(
-        `Failed to load connection for service ${serviceId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      const logMessage = `Failed to load connection for service ${serviceId}: ${message}`;
+
+      if (
+        !message.includes('refresh token') &&
+        !message.includes('Missing access token')
+      ) {
+        this.logger.warn(logMessage);
+      }
       return undefined;
     }
   }
