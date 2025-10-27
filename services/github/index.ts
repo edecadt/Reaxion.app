@@ -57,8 +57,8 @@ export default createService({
     authorizationUrl: "https://github.com/login/oauth/authorize",
     tokenUrl: "https://github.com/login/oauth/access_token",
     scopes: ["repo", "user"],
-    clientIdEnvVar: "GITHUB_CLIENT_ID",
-    clientSecretEnvVar: "GITHUB_CLIENT_SECRET",
+    clientIdEnvVar: "GITHUB_CLIENT_ID_ACTION",
+    clientSecretEnvVar: "GITHUB_CLIENT_SECRET_ACTION",
   },
 
   onConnect: async (ctx) => {
