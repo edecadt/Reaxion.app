@@ -34,11 +34,12 @@ const resolvePreferredTheme = (): Theme => {
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => resolvePreferredTheme());
+  const [theme, setThemeState] = useState<Theme>("light");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    setThemeState(resolvePreferredTheme());
+    const preferredTheme = resolvePreferredTheme();
+    setThemeState(preferredTheme);
     setIsReady(true);
   }, []);
 
