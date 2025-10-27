@@ -33,6 +33,8 @@ interface GitHubIssue {
   labels?: Array<{ name?: string }>;
   created_at?: string;
   pull_request?: Record<string, unknown> | null;
+  closed_at?: string | null;
+  closed_by?: GitHubUser | null;
 }
 
 interface GitHubIssuesEventPayload {
@@ -190,6 +192,12 @@ type GitHubIssuePollingState = {
   lastSeenCreatedAt?: string;
 };
 
+type GitHubIssueClosedState = {
+  initialized?: boolean;
+  trackedIssueIds?: number[];
+  lastSeenClosedAt?: string;
+};
+
 type GitHubPullRequestCommentState = {
   initialized?: boolean;
   trackedCommentIds?: number[];
@@ -229,6 +237,40 @@ function ensureIssuePollingState(state: unknown): GitHubIssuePollingState {
     typeof typedState.lastSeenCreatedAt !== "string"
   ) {
     typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
+
+function ensureIssueClosedState(state: unknown): GitHubIssueClosedState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false, trackedIssueIds: [] };
+  }
+
+  const typedState = state as GitHubIssueClosedState;
+
+  if (!Array.isArray(typedState.trackedIssueIds)) {
+    typedState.trackedIssueIds = [];
+  } else {
+    typedState.trackedIssueIds = typedState.trackedIssueIds
+      .map((value) => {
+        if (typeof value === "number") {
+          return value;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter((value): value is number => typeof value === "number");
+  }
+
+  if (
+    typedState.lastSeenClosedAt &&
+    typeof typedState.lastSeenClosedAt !== "string"
+  ) {
+    typedState.lastSeenClosedAt = String(typedState.lastSeenClosedAt);
   }
 
   typedState.initialized = Boolean(typedState.initialized);
@@ -564,6 +606,197 @@ export default createService({
 
         ctx.logger?.log?.(
           `[github] Detected issue #${output.issue_number} on ${repositoryFullName}`,
+          "GitHubService",
+        );
+
+        return output;
+      },
+    }),
+    createAction({
+      id: "issue-closed",
+      name: "Issue Closed",
+      description:
+        "Triggers when an issue is closed on the specified repository.",
+      input: {
+        repository_ssh_url: textInput({
+          label: "Repository",
+          description:
+            "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
+          placeholder: "octocat/hello-world",
+          validation: { required: true },
+        }),
+      },
+      output: {
+        issue_number: "number",
+        issue_title: "string",
+        issue_body: "string",
+        issue_url: "string",
+        repository: "string",
+        closed_at: "string",
+        sender: "string",
+        raw_payload: "object",
+      },
+      run: async (params, ctx) => {
+        const repositoryInput = String(params.repository_ssh_url ?? "");
+        const repository = parseRepositoryInput(repositoryInput);
+
+        if (!repository) {
+          ctx.logger?.warn?.(
+            `[github] Invalid repository provided: ${repositoryInput}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for issue closed polling on ${repository.owner}/${repository.repo}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const state = ensureIssueClosedState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${repository.owner}/${repository.repo}/issues?state=all&sort=updated&direction=desc&per_page=${MAX_TRACKED_ISSUE_IDS}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch issues for ${repository.owner}/${repository.repo}: ${response.status}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const issues =
+          ((await response.json()) as GitHubIssue[] | undefined) ?? [];
+
+        const closedIssues = issues.filter((issue): issue is GitHubIssue => {
+          if (!issue) {
+            return false;
+          }
+
+          if (issue.pull_request) {
+            return false;
+          }
+
+          if (typeof issue.id !== "number" || typeof issue.number !== "number") {
+            return false;
+          }
+
+          if (issue.state !== "closed") {
+            return false;
+          }
+
+          if (!issue.closed_at) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (!state.initialized) {
+          state.initialized = true;
+          state.trackedIssueIds = closedIssues
+            .map((issue) => issue.id)
+            .filter((id): id is number => typeof id === "number")
+            .slice(0, MAX_TRACKED_ISSUE_IDS);
+          state.lastSeenClosedAt = closedIssues[0]?.closed_at ?? undefined;
+          return null;
+        }
+
+        const trackedIds = state.trackedIssueIds ?? [];
+        const lastSeenTimestamp = parseTimestamp(state.lastSeenClosedAt);
+
+        const newClosedIssues = closedIssues.filter((issue) => {
+          const issueId = typeof issue.id === "number" ? issue.id : undefined;
+
+          if (!issueId) {
+            return false;
+          }
+
+          if (trackedIds.includes(issueId)) {
+            return false;
+          }
+
+          const closedTimestamp = parseTimestamp(issue.closed_at);
+
+          if (closedTimestamp === undefined) {
+            return false;
+          }
+
+          if (
+            lastSeenTimestamp !== undefined &&
+            closedTimestamp <= lastSeenTimestamp
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (newClosedIssues.length === 0) {
+          return null;
+        }
+
+        newClosedIssues.sort((a, b) => {
+          const aClosed = a.closed_at ? Date.parse(a.closed_at) : 0;
+          const bClosed = b.closed_at ? Date.parse(b.closed_at) : 0;
+          return aClosed - bClosed;
+        });
+
+        const targetIssue = newClosedIssues[0];
+
+        if (!targetIssue || typeof targetIssue.id !== "number") {
+          return null;
+        }
+
+        const repositoryFullName = `${repository.owner}/${repository.repo}`;
+
+        const existingTracked = state.trackedIssueIds ?? [];
+        const updatedTracked = [targetIssue.id, ...existingTracked];
+        state.trackedIssueIds = updatedTracked
+          .filter((value, index, array) => array.indexOf(value) === index)
+          .slice(0, MAX_TRACKED_ISSUE_IDS);
+
+        if (targetIssue.closed_at) {
+          const targetTimestamp = parseTimestamp(targetIssue.closed_at);
+          if (
+            targetTimestamp !== undefined &&
+            (lastSeenTimestamp === undefined ||
+              targetTimestamp > lastSeenTimestamp)
+          ) {
+            state.lastSeenClosedAt = targetIssue.closed_at;
+          }
+        }
+
+        const output = {
+          issue_number: Number(targetIssue.number ?? 0),
+          issue_title: String(targetIssue.title ?? ""),
+          issue_body: String(targetIssue.body ?? ""),
+          issue_url: String(targetIssue.html_url ?? ""),
+          repository: repositoryFullName,
+          closed_at: String(targetIssue.closed_at ?? ""),
+          sender: String(
+            targetIssue.closed_by?.login ?? targetIssue.user?.login ?? "",
+          ),
+          raw_payload: targetIssue as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected closed issue #${output.issue_number} on ${repositoryFullName}`,
           "GitHubService",
         );
 
