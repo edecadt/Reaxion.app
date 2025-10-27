@@ -17,7 +17,6 @@ import {
   activateWorkflow,
   createWorkflow,
   deactivateWorkflow,
-  executeWorkflow,
   getAbout,
   type AboutService,
 } from "../../src/lib/api";
@@ -281,7 +280,6 @@ export default function CreateWorkflowWizard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [created, setCreated] = useState<Workflow | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [lastRunId, setLastRunId] = useState<string | null>(null);
 
   const handleCreate = useCallback(async () => {
     if (!isFormValid) return;
@@ -319,20 +317,6 @@ export default function CreateWorkflowWizard() {
         : await activateWorkflow(created.id, token ?? undefined);
       setCreated(updated);
       toast.success(updated.active ? "Workflow activé" : "Workflow désactivé");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur inconnue");
-    } finally {
-      setActionLoading(false);
-    }
-  }, [created, toast, token]);
-
-  const handleExecute = useCallback(async () => {
-    if (!created) return;
-    setActionLoading(true);
-    try {
-      const { runId } = await executeWorkflow(created.id, token ?? undefined);
-      setLastRunId(runId);
-      toast.success("Exécution démarrée");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
@@ -766,18 +750,7 @@ export default function CreateWorkflowWizard() {
                         onPress={handleToggleActive}
                         disabled={actionLoading}
                       />
-                      <SecondaryButton
-                        label="Exécuter maintenant"
-                        icon="play-circle"
-                        onPress={handleExecute}
-                        disabled={actionLoading}
-                      />
                     </View>
-                    {lastRunId && (
-                      <Text style={styles.helperText}>
-                        Dernière exécution : {lastRunId}
-                      </Text>
-                    )}
                   </View>
                 )}
               </View>

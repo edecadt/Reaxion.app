@@ -16,7 +16,6 @@ import {
 import {
   activateWorkflow,
   deactivateWorkflow,
-  executeWorkflow,
   getWorkflows,
   deleteWorkflow,
 } from "../../lib/api";
@@ -76,23 +75,6 @@ export default function WorkflowsPage() {
         setWorkflows((prev) =>
           prev.map((item) => (item.id === updated.id ? updated : item)),
         );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Erreur inconnue";
-        setError(message);
-        setState("error");
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [token],
-  );
-
-  const handleExecute = useCallback(
-    async (workflow: Workflow) => {
-      if (!token) return;
-      setBusyId(workflow.id);
-      try {
-        await executeWorkflow(workflow.id, token);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erreur inconnue";
         setError(message);
@@ -227,13 +209,6 @@ export default function WorkflowsPage() {
                       disabled={loadingThis}
                     >
                       {workflow.active ? "Désactiver" : "Activer"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleExecute(workflow)}
-                      disabled={loadingThis}
-                    >
-                      Exécuter
                     </Button>
                     <Button
                       variant="destructive"

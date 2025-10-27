@@ -14,7 +14,6 @@ import {
   getWorkflows,
   activateWorkflow,
   deactivateWorkflow,
-  executeWorkflow,
 } from "../../src/lib/api";
 import { useToast } from "../../src/components/Toast";
 import { useAuth } from "../../src/hooks/useAuth";
@@ -69,19 +68,6 @@ export default function WorkflowsList() {
         prev.map((item) => (item.id === updated.id ? updated : item)),
       );
       toast.success(updated.active ? "Activé" : "Désactivé");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Erreur inconnue";
-      toast.error(msg);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function runNow(w: Workflow) {
-    setBusyId(w.id);
-    try {
-      const { runId } = await executeWorkflow(w.id, token ?? undefined);
-      toast.success(`Exécution démarrée: ${runId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erreur inconnue";
       toast.error(msg);
@@ -167,16 +153,6 @@ export default function WorkflowsList() {
                       <Text style={styles.secondaryButtonText}>
                         {w.active ? "Désactiver" : "Activer"}
                       </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => runNow(w)}
-                      disabled={busyId === w.id}
-                      style={[
-                        styles.secondaryButton,
-                        busyId === w.id && styles.buttonDisabled,
-                      ]}
-                    >
-                      <Text style={styles.secondaryButtonText}>Exécuter</Text>
                     </Pressable>
                   </View>
                 </View>
