@@ -188,6 +188,12 @@ type GitHubPullRequestCommentState = {
   lastSeenCreatedAt?: string;
 };
 
+type GitHubPullRequestMergedState = {
+  initialized?: boolean;
+  lastKnownMergedAt?: string;
+  lastKnownMergeCommitSha?: string;
+};
+
 function ensurePullRequestState(
   state: unknown,
 ): GitHubPullRequestPollingState {
@@ -253,6 +259,36 @@ function ensurePullRequestCommentState(
     typeof typedState.lastSeenCreatedAt !== "string"
   ) {
     typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
+
+function ensurePullRequestMergedState(
+  state: unknown,
+): GitHubPullRequestMergedState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false };
+  }
+
+  const typedState = state as GitHubPullRequestMergedState;
+
+  if (
+    typedState.lastKnownMergedAt &&
+    typeof typedState.lastKnownMergedAt !== "string"
+  ) {
+    typedState.lastKnownMergedAt = String(typedState.lastKnownMergedAt);
+  }
+
+  if (
+    typedState.lastKnownMergeCommitSha &&
+    typeof typedState.lastKnownMergeCommitSha !== "string"
+  ) {
+    typedState.lastKnownMergeCommitSha = String(
+      typedState.lastKnownMergeCommitSha,
+    );
   }
 
   typedState.initialized = Boolean(typedState.initialized);
@@ -611,17 +647,7 @@ export default createService({
       id: "pull-request-merged",
       name: "Pull Request Merged",
       description:
-        "Triggers when a pull request is merged on the specified repository.",
-      input: {
-        repository_ssh_url: textInput({
-          label: "Repository",
-          description:
-            "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
-          placeholder: "octocat/hello-world",
-      id: "pull-request-comment-created",
-      name: "Pull Request Comment Added",
-      description:
-        "Triggers when a new comment is added to the specified pull request.",
+        "Triggers when the specified pull request is merged.",
       input: {
         pull_request_url: textInput({
           label: "Pull Request URL",
@@ -643,48 +669,138 @@ export default createService({
         raw_payload: "object",
       },
       run: async (params, ctx) => {
-        if (!ctx.webhookEvents) {
+        const pullRequestInput = String(params.pull_request_url ?? "");
+        const pullRequest = parsePullRequestInput(pullRequestInput);
+
+        if (!pullRequest) {
           ctx.logger?.warn?.(
-            `[github] WebhookEventsService missing, cannot process pull request merged events`,
+            `[github] Invalid pull request identifier provided: ${pullRequestInput}`,
             "GitHubService",
           );
           return null;
         }
 
-        const event = ctx.webhookEvents.getLastUnprocessedEvent(
-          SERVICE_ID,
-          PULL_REQUESTS_WEBHOOK_ID,
-          ctx.userId,
-          ctx.workflowToken,
+        const owner = pullRequest.owner;
+        const repo = pullRequest.repo;
+
+        if (!owner || !repo) {
+          ctx.logger?.warn?.(
+            `[github] Pull request URL must include owner and repository: ${pullRequestInput}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for pull request merge polling on ${owner}/${repo}#${pullRequest.pullRequestNumber}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const state = ensurePullRequestMergedState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls/${pullRequest.pullRequestNumber}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
         );
 
-        if (!event) {
-          return null;
-        }
-
-        const payload = event.payload as GitHubPullRequestEventPayload | undefined;
-
-        const repositoryInput = String(params.repository_ssh_url ?? "");
-        const repositoryFilter = parseRepositoryInput(repositoryInput);
-
-        if (!repositoryFilter) {
-          ctx.logger?.warn?.(
-            `[github] Invalid repository provided: ${repositoryInput}`,
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch pull request details for ${owner}/${repo}#${pullRequest.pullRequestNumber}: ${response.status}`,
             "GitHubService",
           );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
+          return null;
+        }
+
+        const pull = (await response.json()) as GitHubPullRequest | undefined;
+
+        if (!pull) {
+          ctx.logger?.warn?.(
+            `[github] Ignored pull request merge polling: missing payload for ${owner}/${repo}#${pullRequest.pullRequestNumber}`,
+            "GitHubService",
           );
           return null;
         }
 
-        if (!payload || !payload.pull_request) {
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
+        const mergedAtRaw = pull.merged_at;
+        const mergedAt = typeof mergedAtRaw === "string" ? mergedAtRaw : undefined;
+        const mergeCommitSha = pull.merge_commit_sha ?? undefined;
+
+        if (!state.initialized) {
+          state.initialized = true;
+          state.lastKnownMergedAt = mergedAt;
+          state.lastKnownMergeCommitSha = mergeCommitSha;
+          return null;
+        }
+
+        if (!mergedAt) {
+          state.lastKnownMergedAt = undefined;
+          state.lastKnownMergeCommitSha = undefined;
+          return null;
+        }
+
+        const normalizedMergedAt = mergedAt;
+
+        if (
+          state.lastKnownMergedAt &&
+          state.lastKnownMergedAt === normalizedMergedAt
+        ) {
+          return null;
+        }
+
+        state.lastKnownMergedAt = normalizedMergedAt;
+        state.lastKnownMergeCommitSha = mergeCommitSha;
+
+        const repositoryFullName =
+          pull.base?.repo?.full_name ?? `${owner}/${repo}`;
+
+        const output = {
+          pull_request_number: Number(pull.number ?? pullRequest.pullRequestNumber),
+          pull_request_title: String(pull.title ?? ""),
+          pull_request_url: String(pull.html_url ?? pullRequestInput),
+          repository: repositoryFullName,
+          merged_by: String(pull.merged_by?.login ?? ""),
+          merged_at: normalizedMergedAt,
+          merge_commit_sha: String(mergeCommitSha ?? ""),
+          sender: String(pull.user?.login ?? ""),
+          raw_payload: pull as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected merged pull request #${output.pull_request_number} on ${repositoryFullName}`,
+          "GitHubService",
+        );
+
+        return output;
+      },
+    }),
+    createAction({
+      id: "pull-request-comment-created",
+      name: "Pull Request Comment Added",
+      description:
+        "Triggers when a new comment is added to the specified pull request.",
+      input: {
+        pull_request_url: textInput({
+          label: "Pull Request URL",
+          description:
+            "Full GitHub pull request URL, for example: https://github.com/octocat/hello-world/pull/42",
+          placeholder: "https://github.com/octocat/hello-world/pull/42",
+          validation: { required: true },
+        }),
+      },
+      output: {
+        pull_request_number: "number",
         comment_body: "string",
         comment_url: "string",
         comment_author: "string",
@@ -698,9 +814,9 @@ export default createService({
 
         if (!pullRequest) {
           ctx.logger?.warn?.(
-          `[github] Invalid pull request identifier provided: ${pullRequestInput}`,
-          "GitHubService",
-        );
+            `[github] Invalid pull request identifier provided: ${pullRequestInput}`,
+            "GitHubService",
+          );
           return null;
         }
 
@@ -724,78 +840,6 @@ export default createService({
           );
           return null;
         }
-
-        const repoFullNameRaw =
-          payload.repository?.full_name ??
-          payload.pull_request.base?.repo?.full_name ??
-          "";
-
-        if (!repoFullNameRaw) {
-          ctx.logger?.log?.(
-            `[github] Ignored pull request event with missing repository information`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
-          return null;
-        }
-
-        const expectedFullName = `${repositoryFilter.owner}/${repositoryFilter.repo}`;
-        const normalizedRepo = repoFullNameRaw.toLowerCase();
-
-        if (normalizedRepo !== expectedFullName) {
-          ctx.logger?.log?.(
-            `[github] Ignored pull request event: expected ${expectedFullName}, received ${normalizedRepo}`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
-          return null;
-        }
-
-        if (payload.action !== "closed" || !payload.pull_request.merged) {
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
-          return null;
-        }
-
-        const mergedAtRaw = payload.pull_request.merged_at;
-        const mergedAt = typeof mergedAtRaw === "string" ? mergedAtRaw : "";
-        const mergeCommitSha = payload.pull_request.merge_commit_sha ?? "";
-        const mergedBy =
-          payload.pull_request.merged_by?.login ?? payload.sender?.login ?? "";
-
-        const output = {
-          pull_request_number: Number(payload.pull_request.number ?? 0),
-          pull_request_title: String(payload.pull_request.title ?? ""),
-          pull_request_url: String(payload.pull_request.html_url ?? ""),
-          repository: repoFullNameRaw,
-          merged_by: mergedBy,
-          merged_at: mergedAt,
-          merge_commit_sha: mergeCommitSha,
-          sender: String(payload.sender?.login ?? ""),
-          raw_payload: payload as Record<string, unknown>,
-        };
-
-        ctx.logger?.log?.(
-          `[github] Detected merged pull request #${output.pull_request_number} on ${repoFullNameRaw}`,
-          "GitHubService",
-        );
-
-        ctx.webhookEvents.markAsProcessed(
-          SERVICE_ID,
-          PULL_REQUESTS_WEBHOOK_ID,
-          event.timestamp,
-        );
 
         const state = ensurePullRequestCommentState(ctx.state);
         ctx.state = state;
