@@ -4,6 +4,7 @@ const SERVICE_ID = "github";
 const ISSUES_WEBHOOK_ID = "issues";
 const PULL_REQUESTS_WEBHOOK_ID = "pull-requests";
 
+const MAX_TRACKED_ISSUE_IDS = 50;
 const MAX_TRACKED_PULL_REQUEST_IDS = 50;
 const MAX_TRACKED_PULL_REQUEST_COMMENT_IDS = 50;
 
@@ -31,6 +32,7 @@ interface GitHubIssue {
   user?: GitHubUser;
   labels?: Array<{ name?: string }>;
   created_at?: string;
+  pull_request?: Record<string, unknown> | null;
 }
 
 interface GitHubIssuesEventPayload {
@@ -182,6 +184,12 @@ type GitHubPullRequestPollingState = {
   lastSeenCreatedAt?: string;
 };
 
+type GitHubIssuePollingState = {
+  initialized?: boolean;
+  trackedIssueIds?: number[];
+  lastSeenCreatedAt?: string;
+};
+
 type GitHubPullRequestCommentState = {
   initialized?: boolean;
   trackedCommentIds?: number[];
@@ -193,6 +201,40 @@ type GitHubPullRequestMergedState = {
   lastKnownMergedAt?: string;
   lastKnownMergeCommitSha?: string;
 };
+
+function ensureIssuePollingState(state: unknown): GitHubIssuePollingState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false, trackedIssueIds: [] };
+  }
+
+  const typedState = state as GitHubIssuePollingState;
+
+  if (!Array.isArray(typedState.trackedIssueIds)) {
+    typedState.trackedIssueIds = [];
+  } else {
+    typedState.trackedIssueIds = typedState.trackedIssueIds
+      .map((value) => {
+        if (typeof value === "number") {
+          return value;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter((value): value is number => typeof value === "number");
+  }
+
+  if (
+    typedState.lastSeenCreatedAt &&
+    typeof typedState.lastSeenCreatedAt !== "string"
+  ) {
+    typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
 
 function ensurePullRequestState(
   state: unknown,
@@ -369,106 +411,160 @@ export default createService({
         raw_payload: "object",
       },
       run: async (params, ctx) => {
-        if (!ctx.webhookEvents) {
+        const repositoryInput = String(params.repository_ssh_url ?? "");
+        const repository = parseRepositoryInput(repositoryInput);
+
+        if (!repository) {
           ctx.logger?.warn?.(
-            `[github] WebhookEventsService missing, cannot process events`,
+            `[github] Invalid repository provided: ${repositoryInput}`,
             "GitHubService",
           );
           return null;
         }
 
-        const event = ctx.webhookEvents.getLastUnprocessedEvent(
-          SERVICE_ID,
-          ISSUES_WEBHOOK_ID,
-          ctx.userId,
-          ctx.workflowToken,
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for issue polling on ${repository.owner}/${repository.repo}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const state = ensureIssuePollingState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${repository.owner}/${repository.repo}/issues?state=all&sort=created&direction=desc&per_page=${MAX_TRACKED_ISSUE_IDS}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
         );
 
-        if (!event) {
-          return null;
-        }
-
-        const payload = event.payload as GitHubIssuesEventPayload | undefined;
-
-        if (!payload || payload.action !== "opened" || !payload.issue) {
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            ISSUES_WEBHOOK_ID,
-            event.timestamp,
-          );
-          return null;
-        }
-
-        const repositoryUrl = String(params.repository_ssh_url ?? "");
-        const parsedRepository = parseRepositoryInput(repositoryUrl);
-
-        if (!parsedRepository) {
-          ctx.logger?.warn?.(
-            `[github] Invalid repository provided: ${repositoryUrl}`,
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch issues for ${repository.owner}/${repository.repo}: ${response.status}`,
             "GitHubService",
           );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            ISSUES_WEBHOOK_ID,
-            event.timestamp,
-          );
           return null;
         }
 
-        const { owner: ownerFilter, repo: repoFilter } = parsedRepository;
+        const issues =
+          ((await response.json()) as GitHubIssue[] | undefined) ?? [];
 
-        const repository = payload.repository;
-        const repoFullName = repository?.full_name ?? "";
+        const validIssues = issues.filter((issue): issue is GitHubIssue => {
+          if (!issue) {
+            return false;
+          }
 
-        if (!repoFullName) {
-          ctx.logger?.log?.(
-            `[github] Ignored issue: missing repository information in payload`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            ISSUES_WEBHOOK_ID,
-            event.timestamp,
-          );
+          if (issue.pull_request) {
+            return false;
+          }
+
+          if (typeof issue.id !== "number" || typeof issue.number !== "number") {
+            return false;
+          }
+
+          if (!issue.created_at) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (!state.initialized) {
+          state.initialized = true;
+          state.trackedIssueIds = validIssues
+            .map((issue) => issue.id)
+            .filter((id): id is number => typeof id === "number")
+            .slice(0, MAX_TRACKED_ISSUE_IDS);
+          state.lastSeenCreatedAt = validIssues[0]?.created_at ?? undefined;
           return null;
         }
 
-        const [payloadOwner = "", payloadRepo = ""] = repoFullName
-          .toLowerCase()
-          .split("/");
+        const trackedIds = state.trackedIssueIds ?? [];
+        const lastSeenTimestamp = parseTimestamp(state.lastSeenCreatedAt);
 
-        if (ownerFilter !== payloadOwner || repoFilter !== payloadRepo) {
-          ctx.logger?.log?.(
-            `[github] Ignored issue: expected ${ownerFilter}/${repoFilter}, received ${payloadOwner}/${payloadRepo}`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            ISSUES_WEBHOOK_ID,
-            event.timestamp,
-          );
+        const newIssues = validIssues.filter((issue) => {
+          const issueId = typeof issue.id === "number" ? issue.id : undefined;
+
+          if (!issueId) {
+            return false;
+          }
+
+          if (trackedIds.includes(issueId)) {
+            return false;
+          }
+
+          const createdTimestamp = parseTimestamp(issue.created_at);
+
+          if (createdTimestamp === undefined) {
+            return false;
+          }
+
+          if (
+            lastSeenTimestamp !== undefined &&
+            createdTimestamp < lastSeenTimestamp
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (newIssues.length === 0) {
           return null;
+        }
+
+        newIssues.sort((a, b) => {
+          const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+          const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+          return aCreated - bCreated;
+        });
+
+        const targetIssue = newIssues[0];
+
+        if (!targetIssue || typeof targetIssue.id !== "number") {
+          return null;
+        }
+
+        const repositoryFullName = `${repository.owner}/${repository.repo}`;
+
+        const existingTracked = state.trackedIssueIds ?? [];
+        const updatedTracked = [targetIssue.id, ...existingTracked];
+        state.trackedIssueIds = updatedTracked
+          .filter((value, index, array) => array.indexOf(value) === index)
+          .slice(0, MAX_TRACKED_ISSUE_IDS);
+
+        if (targetIssue.created_at) {
+          const targetTimestamp = parseTimestamp(targetIssue.created_at);
+          if (
+            targetTimestamp !== undefined &&
+            (lastSeenTimestamp === undefined ||
+              targetTimestamp > lastSeenTimestamp)
+          ) {
+            state.lastSeenCreatedAt = targetIssue.created_at;
+          }
         }
 
         const output = {
-          issue_number: Number(payload.issue.number ?? 0),
-          issue_title: String(payload.issue.title ?? ""),
-          issue_body: String(payload.issue.body ?? ""),
-          issue_url: String(payload.issue.html_url ?? ""),
-          repository: repoFullName,
-          sender: String(payload.sender?.login ?? ""),
-          raw_payload: payload as Record<string, unknown>,
+          issue_number: Number(targetIssue.number ?? 0),
+          issue_title: String(targetIssue.title ?? ""),
+          issue_body: String(targetIssue.body ?? ""),
+          issue_url: String(targetIssue.html_url ?? ""),
+          repository: repositoryFullName,
+          sender: String(targetIssue.user?.login ?? ""),
+          raw_payload: targetIssue as Record<string, unknown>,
         };
 
         ctx.logger?.log?.(
-          `[github] Detected issue #${output.issue_number} on ${repoFullName}`,
+          `[github] Detected issue #${output.issue_number} on ${repositoryFullName}`,
           "GitHubService",
-        );
-
-        ctx.webhookEvents.markAsProcessed(
-          SERVICE_ID,
-          ISSUES_WEBHOOK_ID,
-          event.timestamp,
         );
 
         return output;
