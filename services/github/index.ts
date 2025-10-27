@@ -49,6 +49,9 @@ interface GitHubPullRequest {
   draft?: boolean;
   user?: GitHubUser | null;
   merged?: boolean;
+  merged_at?: string | null;
+  merged_by?: GitHubUser | null;
+  merge_commit_sha?: string | null;
   created_at?: string | null;
   base?: {
     repo?: GitHubRepository | null;
@@ -168,9 +171,9 @@ function parseTimestamp(value: string | null | undefined): number | undefined {
 export default createService({
   id: SERVICE_ID,
   name: "GitHub",
-  version: "1.3.0",
+  version: "1.4.0",
   description:
-    "Triggers workflows when new issues or pull requests are created on a GitHub repository.",
+    "Triggers workflows when GitHub issues are created, pull requests open, or pull requests are merged.",
   logo: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
   auth: {
     type: "oauth2",
@@ -498,6 +501,153 @@ export default createService({
         ctx.logger?.log?.(
           `[github] Detected pull request #${output.pull_request_number} on ${repositoryFullName}`,
           "GitHubService",
+        );
+
+        return output;
+      },
+    }),
+    createAction({
+      id: "pull-request-merged",
+      name: "Pull Request Merged",
+      description:
+        "Triggers when a pull request is merged on the specified repository.",
+      input: {
+        repository_ssh_url: textInput({
+          label: "Repository",
+          description:
+            "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
+          placeholder: "octocat/hello-world",
+          validation: { required: true },
+        }),
+      },
+      output: {
+        pull_request_number: "number",
+        pull_request_title: "string",
+        pull_request_url: "string",
+        repository: "string",
+        merged_by: "string",
+        merged_at: "string",
+        merge_commit_sha: "string",
+        sender: "string",
+        raw_payload: "object",
+      },
+      run: async (params, ctx) => {
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[github] WebhookEventsService missing, cannot process pull request merged events`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          PULL_REQUESTS_WEBHOOK_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          return null;
+        }
+
+        const payload = event.payload as GitHubPullRequestEventPayload | undefined;
+
+        const repositoryInput = String(params.repository_ssh_url ?? "");
+        const repositoryFilter = parseRepositoryInput(repositoryInput);
+
+        if (!repositoryFilter) {
+          ctx.logger?.warn?.(
+            `[github] Invalid repository provided: ${repositoryInput}`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        if (!payload || !payload.pull_request) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const repoFullNameRaw =
+          payload.repository?.full_name ??
+          payload.pull_request.base?.repo?.full_name ??
+          "";
+
+        if (!repoFullNameRaw) {
+          ctx.logger?.log?.(
+            `[github] Ignored pull request event with missing repository information`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const expectedFullName = `${repositoryFilter.owner}/${repositoryFilter.repo}`;
+        const normalizedRepo = repoFullNameRaw.toLowerCase();
+
+        if (normalizedRepo !== expectedFullName) {
+          ctx.logger?.log?.(
+            `[github] Ignored pull request event: expected ${expectedFullName}, received ${normalizedRepo}`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        if (payload.action !== "closed" || !payload.pull_request.merged) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const mergedAtRaw = payload.pull_request.merged_at;
+        const mergedAt = typeof mergedAtRaw === "string" ? mergedAtRaw : "";
+        const mergeCommitSha = payload.pull_request.merge_commit_sha ?? "";
+        const mergedBy =
+          payload.pull_request.merged_by?.login ?? payload.sender?.login ?? "";
+
+        const output = {
+          pull_request_number: Number(payload.pull_request.number ?? 0),
+          pull_request_title: String(payload.pull_request.title ?? ""),
+          pull_request_url: String(payload.pull_request.html_url ?? ""),
+          repository: repoFullNameRaw,
+          merged_by: mergedBy,
+          merged_at: mergedAt,
+          merge_commit_sha: mergeCommitSha,
+          sender: String(payload.sender?.login ?? ""),
+          raw_payload: payload as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected merged pull request #${output.pull_request_number} on ${repoFullNameRaw}`,
+          "GitHubService",
+        );
+
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          PULL_REQUESTS_WEBHOOK_ID,
+          event.timestamp,
         );
 
         return output;
