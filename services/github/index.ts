@@ -2,6 +2,7 @@ import { createAction, createService, createWebhook, textInput } from "@area/sdk
 
 const SERVICE_ID = "github";
 const ISSUES_WEBHOOK_ID = "issues";
+const PULL_REQUESTS_WEBHOOK_ID = "pull-requests";
 
 interface GitHubUser {
   login?: string;
@@ -36,6 +37,32 @@ interface GitHubIssuesEventPayload {
   sender?: GitHubUser;
 }
 
+interface GitHubPullRequest {
+  id?: number;
+  number?: number;
+  title?: string | null;
+  body?: string | null;
+  html_url?: string | null;
+  state?: string | null;
+  draft?: boolean;
+  user?: GitHubUser | null;
+  merged?: boolean;
+  created_at?: string | null;
+  base?: {
+    repo?: GitHubRepository | null;
+  } | null;
+  head?: {
+    repo?: GitHubRepository | null;
+  } | null;
+}
+
+interface GitHubPullRequestEventPayload {
+  action?: string;
+  pull_request?: GitHubPullRequest | null;
+  repository?: GitHubRepository | null;
+  sender?: GitHubUser | null;
+}
+
 function normalizeHeaderValue(
   value: string | string[] | undefined,
 ): string | undefined {
@@ -45,12 +72,37 @@ function normalizeHeaderValue(
   return value ?? undefined;
 }
 
+function parseRepositoryFromSshUrl(
+  url: string,
+): { owner: string; repo: string } | null {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = trimmed.match(
+    /^git@github\.com:([\w.-]+)\/([\w.-]+)(?:\.git)?$/i,
+  );
+  if (!match) {
+    return null;
+  }
+
+  const owner = match[1]?.toLowerCase();
+  const repo = match[2]?.toLowerCase();
+
+  if (!owner || !repo) {
+    return null;
+  }
+
+  return { owner, repo };
+}
+
 export default createService({
   id: SERVICE_ID,
   name: "GitHub",
-  version: "1.0.0",
+  version: "1.2.0",
   description:
-    "Triggers workflows when a new issue is created on a GitHub repository.",
+    "Triggers workflows when new issues or pull requests are created on a GitHub repository.",
   logo: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
   auth: {
     type: "oauth2",
@@ -91,15 +143,11 @@ export default createService({
       description:
         "Triggers when a new issue is opened on the specified repository.",
       input: {
-        owner: textInput({
-          label: "Repository Owner",
-          description: "GitHub username or organization name (leave empty for any)",
-          placeholder: "octocat",
-        }),
-        repo: textInput({
-          label: "Repository Name",
-          description: "Repository name (leave empty for any)",
-          placeholder: "hello-world",
+        repository_ssh_url: textInput({
+          label: "Repository SSH URL",
+          description: "Exact SSH URL of the repository. Example: git@github.com:octocat/hello-world.git",
+          placeholder: "git@github.com:octocat/hello-world.git",
+          validation: { required: true },
         }),
       },
       output: {
@@ -142,22 +190,12 @@ export default createService({
           return null;
         }
 
-        const ownerFilter = String(params.owner ?? "")
-          .trim()
-          .toLowerCase();
-        const repoFilter = String(params.repo ?? "")
-          .trim()
-          .toLowerCase();
+        const repositoryUrl = String(params.repository_ssh_url ?? "");
+        const parsedRepository = parseRepositoryFromSshUrl(repositoryUrl);
 
-        const repository = payload.repository;
-        const repoFullName = repository?.full_name ?? "";
-        const [payloadOwner = "", payloadRepo = ""] = repoFullName
-          .toLowerCase()
-          .split("/");
-
-        if (ownerFilter && ownerFilter !== payloadOwner) {
-          ctx.logger?.log?.(
-            `[github] Ignored issue: owner ${payloadOwner} does not match filter ${ownerFilter}`,
+        if (!parsedRepository) {
+          ctx.logger?.warn?.(
+            `[github] Invalid repository SSH URL provided: ${repositoryUrl}`,
             "GitHubService",
           );
           ctx.webhookEvents.markAsProcessed(
@@ -168,9 +206,31 @@ export default createService({
           return null;
         }
 
-        if (repoFilter && repoFilter !== payloadRepo) {
+        const { owner: ownerFilter, repo: repoFilter } = parsedRepository;
+
+        const repository = payload.repository;
+        const repoFullName = repository?.full_name ?? "";
+
+        if (!repoFullName) {
           ctx.logger?.log?.(
-            `[github] Ignored issue: repo ${payloadRepo} does not match filter ${repoFilter}`,
+            `[github] Ignored issue: missing repository information in payload`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            ISSUES_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const [payloadOwner = "", payloadRepo = ""] = repoFullName
+          .toLowerCase()
+          .split("/");
+
+        if (ownerFilter !== payloadOwner || repoFilter !== payloadRepo) {
+          ctx.logger?.log?.(
+            `[github] Ignored issue: expected ${ownerFilter}/${repoFilter}, received ${payloadOwner}/${payloadRepo}`,
             "GitHubService",
           );
           ctx.webhookEvents.markAsProcessed(
@@ -205,6 +265,137 @@ export default createService({
         return output;
       },
     }),
+    createAction({
+      id: "pull-request-opened",
+      name: "Pull Request Opened",
+      description:
+        "Triggers when a new pull request is opened on the specified repository.",
+      input: {
+        repository_ssh_url: textInput({
+          label: "Repository SSH URL",
+          description: "Exact SSH URL of the repository. Example: git@github.com:octocat/hello-world.git",
+          placeholder: "git@github.com:octocat/hello-world.git",
+          validation: { required: true },
+        }),
+      },
+      output: {
+        pull_request_number: "number",
+        pull_request_title: "string",
+        pull_request_body: "string",
+        pull_request_url: "string",
+        repository: "string",
+        sender: "string",
+        raw_payload: "object",
+      },
+      run: async (params, ctx) => {
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[github] WebhookEventsService missing, cannot process events`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          PULL_REQUESTS_WEBHOOK_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          return null;
+        }
+
+        const payload = event.payload as GitHubPullRequestEventPayload | null;
+
+        if (!payload || payload.action !== "opened" || !payload.pull_request) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const repositoryUrl = String(params.repository_ssh_url ?? "");
+        const parsedRepository = parseRepositoryFromSshUrl(repositoryUrl);
+
+        if (!parsedRepository) {
+          ctx.logger?.warn?.(
+            `[github] Invalid repository SSH URL provided: ${repositoryUrl}`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const { owner: ownerFilter, repo: repoFilter } = parsedRepository;
+
+        const repository =
+          payload.repository ?? payload.pull_request.base?.repo ?? undefined;
+        const repoFullName = repository?.full_name ?? "";
+
+        if (!repoFullName) {
+          ctx.logger?.log?.(
+            `[github] Ignored pull request: missing repository information in payload`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const [payloadOwner = "", payloadRepo = ""] = repoFullName
+          .toLowerCase()
+          .split("/");
+
+        if (ownerFilter !== payloadOwner || repoFilter !== payloadRepo) {
+          ctx.logger?.log?.(
+            `[github] Ignored pull request: expected ${ownerFilter}/${repoFilter}, received ${payloadOwner}/${payloadRepo}`,
+            "GitHubService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            PULL_REQUESTS_WEBHOOK_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        const pullRequest = payload.pull_request;
+
+        const output = {
+          pull_request_number: Number(pullRequest.number ?? 0),
+          pull_request_title: String(pullRequest.title ?? ""),
+          pull_request_body: String(pullRequest.body ?? ""),
+          pull_request_url: String(pullRequest.html_url ?? ""),
+          repository: repoFullName,
+          sender: String(payload.sender?.login ?? ""),
+          raw_payload: payload as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected pull request #${output.pull_request_number} on ${repoFullName}`,
+          "GitHubService",
+        );
+
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          PULL_REQUESTS_WEBHOOK_ID,
+          event.timestamp,
+        );
+
+        return output;
+      },
+    }),
   ],
 
   webhooks: [
@@ -227,6 +418,32 @@ export default createService({
         );
 
         const body = payload as GitHubIssuesEventPayload | undefined;
+
+        return {
+          received: true,
+          action: String(body?.action ?? ""),
+        };
+      },
+    }),
+    createWebhook({
+      id: PULL_REQUESTS_WEBHOOK_ID,
+      name: "Pull Requests",
+      description: "Receives GitHub pull request webhooks.",
+      output: {
+        received: "boolean",
+        action: "string",
+      },
+      run: async (_eventName, payload, ctx) => {
+        const headers = ctx.rawRequest?.headers ?? {};
+        const deliveryId = normalizeHeaderValue(headers["x-github-delivery"]);
+        const eventName = normalizeHeaderValue(headers["x-github-event"]);
+
+        ctx.logger?.log?.(
+          `[github] Webhook received${deliveryId ? ` (#${deliveryId})` : ""} for event ${eventName ?? "unknown"}`,
+          "GitHubService",
+        );
+
+        const body = payload as GitHubPullRequestEventPayload | undefined;
 
         return {
           received: true,
