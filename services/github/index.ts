@@ -7,6 +7,7 @@ const PULL_REQUESTS_WEBHOOK_ID = "pull-requests";
 const MAX_TRACKED_ISSUE_IDS = 50;
 const MAX_TRACKED_PULL_REQUEST_IDS = 50;
 const MAX_TRACKED_PULL_REQUEST_COMMENT_IDS = 50;
+const MAX_TRACKED_ISSUE_COMMENT_IDS = 50;
 
 interface GitHubUser {
   login?: string;
@@ -180,9 +181,65 @@ function parsePullRequestInput(
   return null;
 }
 
+function parseIssueInput(
+  value: string,
+): { owner?: string; repo?: string; issueNumber: number } | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const urlMatch = trimmed.match(
+    /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d+)(?:\/.*)?$/i,
+  );
+  if (urlMatch) {
+    const owner = urlMatch[1]?.trim().toLowerCase();
+    const repo = urlMatch[2]?.trim().toLowerCase();
+    const numberValue = Number(urlMatch[3]);
+
+    if (!owner || !repo || !Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { owner, repo, issueNumber: numberValue };
+  }
+
+  const hashMatch = trimmed.match(/^([\w.-]+)\/([\w.-]+)#(\d+)$/);
+  if (hashMatch) {
+    const owner = hashMatch[1]?.trim().toLowerCase();
+    const repo = hashMatch[2]?.trim().toLowerCase();
+    const numberValue = Number(hashMatch[3]);
+
+    if (!owner || !repo || !Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { owner, repo, issueNumber: numberValue };
+  }
+
+  const simpleMatch = trimmed.match(/^#?(\d+)$/);
+  if (simpleMatch) {
+    const numberValue = Number(simpleMatch[1]);
+
+    if (!Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { issueNumber: numberValue };
+  }
+
+  return null;
+}
+
 type GitHubPullRequestPollingState = {
   initialized?: boolean;
   trackedPullRequestIds?: number[];
+  lastSeenCreatedAt?: string;
+};
+
+type GitHubIssueCommentState = {
+  initialized?: boolean;
+  trackedCommentIds?: number[];
   lastSeenCreatedAt?: string;
 };
 
@@ -322,6 +379,42 @@ function ensurePullRequestCommentState(
   }
 
   const typedState = state as GitHubPullRequestCommentState;
+
+  if (!Array.isArray(typedState.trackedCommentIds)) {
+    typedState.trackedCommentIds = [];
+  } else {
+    typedState.trackedCommentIds = typedState.trackedCommentIds
+      .map((value) => {
+        if (typeof value === "number") {
+          return value;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter((value): value is number => typeof value === "number");
+  }
+
+  if (
+    typedState.lastSeenCreatedAt &&
+    typeof typedState.lastSeenCreatedAt !== "string"
+  ) {
+    typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
+
+function ensureIssueCommentState(
+  state: unknown,
+): GitHubIssueCommentState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false, trackedCommentIds: [] };
+  }
+
+  const typedState = state as GitHubIssueCommentState;
 
   if (!Array.isArray(typedState.trackedCommentIds)) {
     typedState.trackedCommentIds = [];
@@ -797,6 +890,194 @@ export default createService({
 
         ctx.logger?.log?.(
           `[github] Detected closed issue #${output.issue_number} on ${repositoryFullName}`,
+          "GitHubService",
+        );
+
+        return output;
+      },
+    }),
+    createAction({
+      id: "issue-comment-created",
+      name: "Issue Comment Added",
+      description:
+        "Triggers when a new comment is added to the specified issue.",
+      input: {
+        issue_url: textInput({
+          label: "Issue URL",
+          description:
+            "Full GitHub issue URL, for example: https://github.com/octocat/hello-world/issues/42",
+          placeholder: "https://github.com/octocat/hello-world/issues/42",
+          validation: { required: true },
+        }),
+      },
+      output: {
+        issue_number: "number",
+        comment_body: "string",
+        comment_url: "string",
+        comment_author: "string",
+        comment_created_at: "string",
+        repository: "string",
+        raw_payload: "object",
+      },
+      run: async (params, ctx) => {
+        const issueInput = String(params.issue_url ?? "");
+        const issue = parseIssueInput(issueInput);
+
+        if (!issue) {
+          ctx.logger?.warn?.(
+            `[github] Invalid issue identifier provided: ${issueInput}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const owner = issue.owner;
+        const repo = issue.repo;
+
+        if (!owner || !repo) {
+          ctx.logger?.warn?.(
+            `[github] Issue URL must include owner and repository: ${issueInput}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for issue comment polling on ${owner}/${repo}#${issue.issueNumber}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const state = ensureIssueCommentState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/issues/${issue.issueNumber}/comments?per_page=${MAX_TRACKED_ISSUE_COMMENT_IDS}&sort=created&direction=desc`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch issue comments for ${owner}/${repo}#${issue.issueNumber}: ${response.status}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const comments =
+          ((await response.json()) as GitHubIssueComment[] | undefined) ?? [];
+
+        const validComments = comments.filter((comment) => {
+          if (!comment) {
+            return false;
+          }
+
+          if (typeof comment.id !== "number") {
+            return false;
+          }
+
+          if (!comment.created_at) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (!state.initialized) {
+          state.initialized = true;
+          state.trackedCommentIds = validComments
+            .map((comment) => comment.id)
+            .filter((id): id is number => typeof id === "number")
+            .slice(0, MAX_TRACKED_ISSUE_COMMENT_IDS);
+          state.lastSeenCreatedAt = validComments[0]?.created_at ?? undefined;
+          return null;
+        }
+
+        const trackedIds = state.trackedCommentIds ?? [];
+        const lastSeenTimestamp = parseTimestamp(state.lastSeenCreatedAt);
+
+        const newComments = validComments.filter((comment) => {
+          const commentId = typeof comment.id === "number" ? comment.id : undefined;
+
+          if (!commentId) {
+            return false;
+          }
+
+          if (trackedIds.includes(commentId)) {
+            return false;
+          }
+
+          const createdTimestamp = parseTimestamp(comment.created_at);
+
+          if (createdTimestamp === undefined) {
+            return false;
+          }
+
+          if (
+            lastSeenTimestamp !== undefined &&
+            createdTimestamp <= lastSeenTimestamp
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+
+        if (newComments.length === 0) {
+          return null;
+        }
+
+        newComments.sort((a, b) => {
+          const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+          const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+          return aCreated - bCreated;
+        });
+
+        const targetComment = newComments[0];
+
+        if (!targetComment || typeof targetComment.id !== "number") {
+          return null;
+        }
+
+        const existingTracked = state.trackedCommentIds ?? [];
+        const updatedTracked = [targetComment.id, ...existingTracked];
+        state.trackedCommentIds = updatedTracked
+          .filter((value, index, array) => array.indexOf(value) === index)
+          .slice(0, MAX_TRACKED_ISSUE_COMMENT_IDS);
+
+        if (targetComment.created_at) {
+          const targetTimestamp = parseTimestamp(targetComment.created_at);
+          if (
+            targetTimestamp !== undefined &&
+            (lastSeenTimestamp === undefined ||
+              targetTimestamp > lastSeenTimestamp)
+          ) {
+            state.lastSeenCreatedAt = targetComment.created_at;
+          }
+        }
+
+        const output = {
+          issue_number: issue.issueNumber,
+          comment_body: String(targetComment.body ?? ""),
+          comment_url: String(targetComment.html_url ?? issueInput),
+          comment_author: String(targetComment.user?.login ?? ""),
+          comment_created_at: String(targetComment.created_at ?? ""),
+          repository: `${owner}/${repo}`,
+          raw_payload: targetComment as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected comment on issue #${issue.issueNumber} for ${owner}/${repo}`,
           "GitHubService",
         );
 
