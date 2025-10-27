@@ -11,7 +11,7 @@ type ThemeToggleProps = {
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, toggleTheme, isReady } = useTheme();
-  const isDark = theme === "dark";
+  const isDark = isReady && theme === "dark";
 
   const label = useMemo(
     () => (isDark ? "Activer le thème clair" : "Activer le thème sombre"),
