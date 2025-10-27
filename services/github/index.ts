@@ -5,6 +5,7 @@ const ISSUES_WEBHOOK_ID = "issues";
 const PULL_REQUESTS_WEBHOOK_ID = "pull-requests";
 
 const MAX_TRACKED_PULL_REQUEST_IDS = 50;
+const MAX_TRACKED_PULL_REQUEST_COMMENT_IDS = 50;
 
 interface GitHubUser {
   login?: string;
@@ -37,6 +38,14 @@ interface GitHubIssuesEventPayload {
   issue?: GitHubIssue;
   repository?: GitHubRepository;
   sender?: GitHubUser;
+}
+
+interface GitHubIssueComment {
+  id?: number;
+  body?: string | null;
+  html_url?: string | null;
+  user?: GitHubUser | null;
+  created_at?: string | null;
 }
 
 interface GitHubPullRequest {
@@ -117,9 +126,65 @@ function parseRepositoryInput(
   };
 }
 
+function parsePullRequestInput(
+  value: string,
+): { owner?: string; repo?: string; pullRequestNumber: number } | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const urlMatch = trimmed.match(
+    /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:\/.*)?$/i,
+  );
+  if (urlMatch) {
+    const owner = urlMatch[1]?.trim().toLowerCase();
+    const repo = urlMatch[2]?.trim().toLowerCase();
+    const numberValue = Number(urlMatch[3]);
+
+    if (!owner || !repo || !Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { owner, repo, pullRequestNumber: numberValue };
+  }
+
+  const hashMatch = trimmed.match(/^([\w.-]+)\/([\w.-]+)#(\d+)$/);
+  if (hashMatch) {
+    const owner = hashMatch[1]?.trim().toLowerCase();
+    const repo = hashMatch[2]?.trim().toLowerCase();
+    const numberValue = Number(hashMatch[3]);
+
+    if (!owner || !repo || !Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { owner, repo, pullRequestNumber: numberValue };
+  }
+
+  const simpleMatch = trimmed.match(/^#?(\d+)$/);
+  if (simpleMatch) {
+    const numberValue = Number(simpleMatch[1]);
+
+    if (!Number.isFinite(numberValue) || numberValue <= 0) {
+      return null;
+    }
+
+    return { pullRequestNumber: numberValue };
+  }
+
+  return null;
+}
+
 type GitHubPullRequestPollingState = {
   initialized?: boolean;
   trackedPullRequestIds?: number[];
+  lastSeenCreatedAt?: string;
+};
+
+type GitHubPullRequestCommentState = {
+  initialized?: boolean;
+  trackedCommentIds?: number[];
   lastSeenCreatedAt?: string;
 };
 
@@ -136,6 +201,42 @@ function ensurePullRequestState(
     typedState.trackedPullRequestIds = [];
   } else {
     typedState.trackedPullRequestIds = typedState.trackedPullRequestIds
+      .map((value) => {
+        if (typeof value === "number") {
+          return value;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter((value): value is number => typeof value === "number");
+  }
+
+  if (
+    typedState.lastSeenCreatedAt &&
+    typeof typedState.lastSeenCreatedAt !== "string"
+  ) {
+    typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
+
+function ensurePullRequestCommentState(
+  state: unknown,
+): GitHubPullRequestCommentState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false, trackedCommentIds: [] };
+  }
+
+  const typedState = state as GitHubPullRequestCommentState;
+
+  if (!Array.isArray(typedState.trackedCommentIds)) {
+    typedState.trackedCommentIds = [];
+  } else {
+    typedState.trackedCommentIds = typedState.trackedCommentIds
       .map((value) => {
         if (typeof value === "number") {
           return value;
@@ -517,6 +618,16 @@ export default createService({
           description:
             "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
           placeholder: "octocat/hello-world",
+      id: "pull-request-comment-created",
+      name: "Pull Request Comment Added",
+      description:
+        "Triggers when a new comment is added to the specified pull request.",
+      input: {
+        pull_request_url: textInput({
+          label: "Pull Request URL",
+          description:
+            "Full GitHub pull request URL, for example: https://github.com/octocat/hello-world/pull/42",
+          placeholder: "https://github.com/octocat/hello-world/pull/42",
           validation: { required: true },
         }),
       },
@@ -574,6 +685,42 @@ export default createService({
             SERVICE_ID,
             PULL_REQUESTS_WEBHOOK_ID,
             event.timestamp,
+        comment_body: "string",
+        comment_url: "string",
+        comment_author: "string",
+        comment_created_at: "string",
+        repository: "string",
+        raw_payload: "object",
+      },
+      run: async (params, ctx) => {
+        const pullRequestInput = String(params.pull_request_url ?? "");
+        const pullRequest = parsePullRequestInput(pullRequestInput);
+
+        if (!pullRequest) {
+          ctx.logger?.warn?.(
+          `[github] Invalid pull request identifier provided: ${pullRequestInput}`,
+          "GitHubService",
+        );
+          return null;
+        }
+
+        const owner = pullRequest.owner;
+        const repo = pullRequest.repo;
+
+        if (!owner || !repo) {
+          ctx.logger?.warn?.(
+            `[github] Pull request URL must include owner and repository: ${pullRequestInput}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for pull request comment polling on ${owner}/${repo}#${pullRequest.pullRequestNumber}`,
+            "GitHubService",
           );
           return null;
         }
@@ -648,6 +795,124 @@ export default createService({
           SERVICE_ID,
           PULL_REQUESTS_WEBHOOK_ID,
           event.timestamp,
+        );
+
+        const state = ensurePullRequestCommentState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/issues/${pullRequest.pullRequestNumber}/comments?per_page=${MAX_TRACKED_PULL_REQUEST_COMMENT_IDS}&sort=created&direction=desc`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch pull request comments for ${owner}/${repo}#${pullRequest.pullRequestNumber}: ${response.status}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const comments =
+          ((await response.json()) as GitHubIssueComment[] | undefined) ?? [];
+
+        const validComments = comments.filter(
+          (comment): comment is GitHubIssueComment =>
+            Boolean(comment?.id && comment?.created_at),
+        );
+
+        if (!state.initialized) {
+          state.initialized = true;
+          state.trackedCommentIds = validComments
+            .map((comment) => comment.id)
+            .filter((id): id is number => typeof id === "number")
+            .slice(0, MAX_TRACKED_PULL_REQUEST_COMMENT_IDS);
+          state.lastSeenCreatedAt = validComments[0]?.created_at ?? undefined;
+          return null;
+        }
+
+        const trackedIds = state.trackedCommentIds ?? [];
+        const lastSeenTimestamp = parseTimestamp(state.lastSeenCreatedAt);
+
+        const newComments = validComments.filter((comment) => {
+          const commentId = typeof comment.id === "number" ? comment.id : undefined;
+          if (!commentId) {
+            return false;
+          }
+
+          if (trackedIds.includes(commentId)) {
+            return false;
+          }
+
+          if (!comment.created_at) {
+            return false;
+          }
+
+          if (lastSeenTimestamp !== undefined) {
+            const createdTimestamp = parseTimestamp(comment.created_at);
+            if (
+              createdTimestamp !== undefined &&
+              createdTimestamp <= lastSeenTimestamp
+            ) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        if (newComments.length === 0) {
+          return null;
+        }
+
+        newComments.sort((a, b) => {
+          const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+          const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+          return aCreated - bCreated;
+        });
+
+        const targetComment = newComments[0];
+
+        if (!targetComment || typeof targetComment.id !== "number") {
+          return null;
+        }
+
+        const existingTracked = state.trackedCommentIds ?? [];
+        const updatedTracked = [targetComment.id, ...existingTracked];
+        state.trackedCommentIds = updatedTracked
+          .filter((value, index, array) => array.indexOf(value) === index)
+          .slice(0, MAX_TRACKED_PULL_REQUEST_COMMENT_IDS);
+
+        if (targetComment.created_at) {
+          const targetTimestamp = parseTimestamp(targetComment.created_at);
+          if (
+            targetTimestamp !== undefined &&
+            (lastSeenTimestamp === undefined ||
+              targetTimestamp > lastSeenTimestamp)
+          ) {
+            state.lastSeenCreatedAt = targetComment.created_at;
+          }
+        }
+
+        const output = {
+          pull_request_number: pullRequest.pullRequestNumber,
+          comment_body: String(targetComment.body ?? ""),
+          comment_url: String(targetComment.html_url ?? ""),
+          comment_author: String(targetComment.user?.login ?? ""),
+          comment_created_at: String(targetComment.created_at ?? ""),
+          repository: `${owner}/${repo}`,
+          raw_payload: targetComment as Record<string, unknown>,
+        };
+
+        ctx.logger?.log?.(
+          `[github] Detected comment on pull request #${pullRequest.pullRequestNumber} for ${owner}/${repo}`,
+          "GitHubService",
         );
 
         return output;
