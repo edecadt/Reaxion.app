@@ -4,6 +4,8 @@ const SERVICE_ID = "github";
 const ISSUES_WEBHOOK_ID = "issues";
 const PULL_REQUESTS_WEBHOOK_ID = "pull-requests";
 
+const MAX_TRACKED_PULL_REQUEST_IDS = 50;
+
 interface GitHubUser {
   login?: string;
   html_url?: string;
@@ -72,35 +74,101 @@ function normalizeHeaderValue(
   return value ?? undefined;
 }
 
-function parseRepositoryFromSshUrl(
-  url: string,
+function parseRepositoryInput(
+  value: string,
 ): { owner: string; repo: string } | null {
-  const trimmed = url.trim();
+  const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
 
-  const match = trimmed.match(
+  const sshMatch = trimmed.match(
     /^git@github\.com:([\w.-]+)\/([\w.-]+)(?:\.git)?$/i,
   );
+  const httpsMatch = trimmed.match(
+    /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)(?:\.git)?$/i,
+  );
+  const ownerRepoMatch = trimmed.match(/^([\w.-]+)\/([\w.-]+)(?:\.git)?$/);
+
+  const match = sshMatch ?? httpsMatch ?? ownerRepoMatch;
   if (!match) {
     return null;
   }
 
-  const owner = match[1]?.toLowerCase();
-  const repo = match[2]?.toLowerCase();
+  const owner = match[1]?.trim();
+  const repoWithSuffix = match[2]?.trim();
+
+  if (!owner || !repoWithSuffix) {
+    return null;
+  }
+
+  const repo = repoWithSuffix.replace(/\.git$/i, "");
 
   if (!owner || !repo) {
     return null;
   }
 
-  return { owner, repo };
+  return {
+    owner: owner.toLowerCase(),
+    repo: repo.toLowerCase(),
+  };
+}
+
+type GitHubPullRequestPollingState = {
+  initialized?: boolean;
+  trackedPullRequestIds?: number[];
+  lastSeenCreatedAt?: string;
+};
+
+function ensurePullRequestState(
+  state: unknown,
+): GitHubPullRequestPollingState {
+  if (!state || typeof state !== "object") {
+    return { initialized: false, trackedPullRequestIds: [] };
+  }
+
+  const typedState = state as GitHubPullRequestPollingState;
+
+  if (!Array.isArray(typedState.trackedPullRequestIds)) {
+    typedState.trackedPullRequestIds = [];
+  } else {
+    typedState.trackedPullRequestIds = typedState.trackedPullRequestIds
+      .map((value) => {
+        if (typeof value === "number") {
+          return value;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter((value): value is number => typeof value === "number");
+  }
+
+  if (
+    typedState.lastSeenCreatedAt &&
+    typeof typedState.lastSeenCreatedAt !== "string"
+  ) {
+    typedState.lastSeenCreatedAt = String(typedState.lastSeenCreatedAt);
+  }
+
+  typedState.initialized = Boolean(typedState.initialized);
+
+  return typedState;
+}
+
+function parseTimestamp(value: string | null | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export default createService({
   id: SERVICE_ID,
   name: "GitHub",
-  version: "1.2.0",
+  version: "1.3.0",
   description:
     "Triggers workflows when new issues or pull requests are created on a GitHub repository.",
   logo: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
@@ -144,9 +212,10 @@ export default createService({
         "Triggers when a new issue is opened on the specified repository.",
       input: {
         repository_ssh_url: textInput({
-          label: "Repository SSH URL",
-          description: "Exact SSH URL of the repository. Example: git@github.com:octocat/hello-world.git",
-          placeholder: "git@github.com:octocat/hello-world.git",
+          label: "Repository",
+          description:
+            "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
+          placeholder: "octocat/hello-world",
           validation: { required: true },
         }),
       },
@@ -191,11 +260,11 @@ export default createService({
         }
 
         const repositoryUrl = String(params.repository_ssh_url ?? "");
-        const parsedRepository = parseRepositoryFromSshUrl(repositoryUrl);
+        const parsedRepository = parseRepositoryInput(repositoryUrl);
 
         if (!parsedRepository) {
           ctx.logger?.warn?.(
-            `[github] Invalid repository SSH URL provided: ${repositoryUrl}`,
+            `[github] Invalid repository provided: ${repositoryUrl}`,
             "GitHubService",
           );
           ctx.webhookEvents.markAsProcessed(
@@ -272,9 +341,10 @@ export default createService({
         "Triggers when a new pull request is opened on the specified repository.",
       input: {
         repository_ssh_url: textInput({
-          label: "Repository SSH URL",
-          description: "Exact SSH URL of the repository. Example: git@github.com:octocat/hello-world.git",
-          placeholder: "git@github.com:octocat/hello-world.git",
+          label: "Repository",
+          description:
+            "Target repository in owner/name format or as a Git URL. Examples: octocat/hello-world, git@github.com:octocat/hello-world.git",
+          placeholder: "octocat/hello-world",
           validation: { required: true },
         }),
       },
@@ -288,109 +358,146 @@ export default createService({
         raw_payload: "object",
       },
       run: async (params, ctx) => {
-        if (!ctx.webhookEvents) {
+        const repositoryInput = String(params.repository_ssh_url ?? "");
+        const repository = parseRepositoryInput(repositoryInput);
+
+        if (!repository) {
           ctx.logger?.warn?.(
-            `[github] WebhookEventsService missing, cannot process events`,
+            `[github] Invalid repository provided: ${repositoryInput}`,
             "GitHubService",
           );
           return null;
         }
 
-        const event = ctx.webhookEvents.getLastUnprocessedEvent(
-          SERVICE_ID,
-          PULL_REQUESTS_WEBHOOK_ID,
-          ctx.userId,
-          ctx.workflowToken,
+        const accessToken = ctx.connection?.accessToken;
+
+        if (!accessToken) {
+          ctx.logger?.warn?.(
+            `[github] Missing access token for pull request polling on ${repository.owner}/${repository.repo}`,
+            "GitHubService",
+          );
+          return null;
+        }
+
+        const state = ensurePullRequestState(ctx.state);
+        ctx.state = state;
+
+        const response = await fetch(
+          `https://api.github.com/repos/${repository.owner}/${repository.repo}/pulls?state=all&sort=created&direction=desc&per_page=${MAX_TRACKED_PULL_REQUEST_IDS}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "ReaxionApp/1.0",
+            },
+          },
         );
 
-        if (!event) {
-          return null;
-        }
-
-        const payload = event.payload as GitHubPullRequestEventPayload | null;
-
-        if (!payload || payload.action !== "opened" || !payload.pull_request) {
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
-          return null;
-        }
-
-        const repositoryUrl = String(params.repository_ssh_url ?? "");
-        const parsedRepository = parseRepositoryFromSshUrl(repositoryUrl);
-
-        if (!parsedRepository) {
-          ctx.logger?.warn?.(
-            `[github] Invalid repository SSH URL provided: ${repositoryUrl}`,
+        if (!response.ok) {
+          ctx.logger?.error?.(
+            `[github] Failed to fetch pull requests for ${repository.owner}/${repository.repo}: ${response.status}`,
             "GitHubService",
           );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
           return null;
         }
 
-        const { owner: ownerFilter, repo: repoFilter } = parsedRepository;
+        const pullRequests =
+          ((await response.json()) as GitHubPullRequest[] | undefined) ?? [];
 
-        const repository =
-          payload.repository ?? payload.pull_request.base?.repo ?? undefined;
-        const repoFullName = repository?.full_name ?? "";
+        const validPulls = pullRequests.filter(
+          (pull): pull is GitHubPullRequest =>
+            Boolean(pull?.id && pull?.number && pull?.created_at),
+        );
 
-        if (!repoFullName) {
-          ctx.logger?.log?.(
-            `[github] Ignored pull request: missing repository information in payload`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
+        if (!state.initialized) {
+          state.initialized = true;
+          state.trackedPullRequestIds = validPulls
+            .map((pull) => pull.id)
+            .filter((id): id is number => typeof id === "number")
+            .slice(0, MAX_TRACKED_PULL_REQUEST_IDS);
+          state.lastSeenCreatedAt = validPulls[0]?.created_at ?? undefined;
           return null;
         }
 
-        const [payloadOwner = "", payloadRepo = ""] = repoFullName
-          .toLowerCase()
-          .split("/");
+        const trackedIds = state.trackedPullRequestIds ?? [];
 
-        if (ownerFilter !== payloadOwner || repoFilter !== payloadRepo) {
-          ctx.logger?.log?.(
-            `[github] Ignored pull request: expected ${ownerFilter}/${repoFilter}, received ${payloadOwner}/${payloadRepo}`,
-            "GitHubService",
-          );
-          ctx.webhookEvents.markAsProcessed(
-            SERVICE_ID,
-            PULL_REQUESTS_WEBHOOK_ID,
-            event.timestamp,
-          );
+        const lastSeenTimestamp = parseTimestamp(state.lastSeenCreatedAt);
+
+        const newPulls = validPulls.filter((pull) => {
+          const pullId = typeof pull.id === "number" ? pull.id : undefined;
+          if (!pullId) {
+            return false;
+          }
+
+          if (trackedIds.includes(pullId)) {
+            return false;
+          }
+
+          if (!pull.created_at) {
+            return false;
+          }
+
+          if (lastSeenTimestamp !== undefined) {
+            const createdTimestamp = parseTimestamp(pull.created_at);
+            if (
+              createdTimestamp !== undefined &&
+              createdTimestamp < lastSeenTimestamp
+            ) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        if (newPulls.length === 0) {
           return null;
         }
 
-        const pullRequest = payload.pull_request;
+        newPulls.sort((a, b) => {
+          const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+          const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+          return aCreated - bCreated;
+        });
+
+        const targetPull = newPulls[0];
+
+        if (!targetPull || typeof targetPull.id !== "number") {
+          return null;
+        }
+
+        const repositoryFullName = `${repository.owner}/${repository.repo}`;
+
+        const existingTracked = state.trackedPullRequestIds ?? [];
+        const updatedTracked = [targetPull.id, ...existingTracked];
+        state.trackedPullRequestIds = updatedTracked
+          .filter((value, index, array) => array.indexOf(value) === index)
+          .slice(0, MAX_TRACKED_PULL_REQUEST_IDS);
+
+        if (targetPull.created_at) {
+          const targetTimestamp = parseTimestamp(targetPull.created_at);
+          if (
+            targetTimestamp !== undefined &&
+            (lastSeenTimestamp === undefined ||
+              targetTimestamp > lastSeenTimestamp)
+          ) {
+            state.lastSeenCreatedAt = targetPull.created_at;
+          }
+        }
 
         const output = {
-          pull_request_number: Number(pullRequest.number ?? 0),
-          pull_request_title: String(pullRequest.title ?? ""),
-          pull_request_body: String(pullRequest.body ?? ""),
-          pull_request_url: String(pullRequest.html_url ?? ""),
-          repository: repoFullName,
-          sender: String(payload.sender?.login ?? ""),
-          raw_payload: payload as Record<string, unknown>,
+          pull_request_number: Number(targetPull.number ?? 0),
+          pull_request_title: String(targetPull.title ?? ""),
+          pull_request_body: String(targetPull.body ?? ""),
+          pull_request_url: String(targetPull.html_url ?? ""),
+          repository: repositoryFullName,
+          sender: String(targetPull.user?.login ?? ""),
+          raw_payload: targetPull as Record<string, unknown>,
         };
 
         ctx.logger?.log?.(
-          `[github] Detected pull request #${output.pull_request_number} on ${repoFullName}`,
+          `[github] Detected pull request #${output.pull_request_number} on ${repositoryFullName}`,
           "GitHubService",
-        );
-
-        ctx.webhookEvents.markAsProcessed(
-          SERVICE_ID,
-          PULL_REQUESTS_WEBHOOK_ID,
-          event.timestamp,
         );
 
         return output;
