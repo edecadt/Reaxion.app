@@ -118,8 +118,6 @@ export default createService({
           "JavaScriptService",
         );
 
-        // If user returned an object, expose its top-level fields
-        // so they can be referenced by following nodes (e.g. {{sum}}).
         const extra: Record<string, unknown> = {};
         if (result && typeof result === "object" && !Array.isArray(result)) {
           for (const [key, value] of Object.entries(

@@ -273,6 +273,7 @@ export type ServiceConnection = {
   isExpired: boolean;
   createdAt: string;
   updatedAt: string;
+  metadata?: Record<string, unknown>;
 };
 
 export async function getServiceConnections(
@@ -319,6 +320,21 @@ export async function disconnectService(
     "DELETE",
     `/api/service-auth/disconnect/${encodeURIComponent(serviceId)}`,
     { token },
+  );
+}
+
+export async function updateServiceMetadata(
+  serviceId: string,
+  metadata: Record<string, unknown>,
+  token: string,
+): Promise<ServiceConnection> {
+  return await request<ServiceConnection>(
+    "POST",
+    `/api/service-auth/connections/${encodeURIComponent(serviceId)}/metadata`,
+    {
+      body: metadata,
+      token,
+    },
   );
 }
 
