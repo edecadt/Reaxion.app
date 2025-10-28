@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import { router } from "expo-router";
 import type {
   AboutService,
@@ -23,6 +24,7 @@ import {
   getServiceConnections,
   connectWithApiKey,
   disconnectService,
+  initiateOAuth2Connection,
 } from "../../src/lib/api";
 import { useToast } from "../../src/components/Toast";
 import { useAuth } from "../../src/hooks/useAuth";
@@ -45,8 +47,14 @@ export default function SettingsPage() {
     useState<ServiceWithConnection | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
 
-  const loadData = useCallback(async () => {
-    if (!token) return;
+  const loadData = useCallback(async (): Promise<
+    ServiceWithConnection[] | null
+  > => {
+    if (!token) {
+      setServices([]);
+      setLoading(false);
+      return null;
+    }
 
     setLoading(true);
 
@@ -78,19 +86,74 @@ export default function SettingsPage() {
           });
 
       setServices(servicesWithConnections);
+      return servicesWithConnections;
     } catch (error) {
       toast.show(
         error instanceof Error ? error.message : "Failed to load services",
         "error",
       );
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, toast]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const startOAuthConnection = useCallback(
+    async (service: ServiceWithConnection) => {
+      if (!token) {
+        toast.show("Authentication required to connect services", "error");
+        return;
+      }
+
+      const serviceId = service.id || service.name;
+      setBusyServiceId(serviceId);
+
+      try {
+        const response = await initiateOAuth2Connection(serviceId, token);
+        const authorizationUrl = response?.authorizationUrl;
+
+        if (!authorizationUrl) {
+          throw new Error("Missing authorization URL from server");
+        }
+
+        toast.show(
+          `Complete the ${service.name} authorization in the browser, then return here.`,
+          "info",
+          3500,
+        );
+
+        const result = await WebBrowser.openBrowserAsync(authorizationUrl);
+
+        const updatedServices = await loadData();
+        const updatedService = updatedServices?.find(
+          (item) => (item.id || item.name) === serviceId,
+        );
+
+        if (updatedService?.isConnected) {
+          toast.show(`Connected to ${service.name}`, "success");
+        } else if (result.type !== "cancel") {
+          toast.show(
+            `Unable to confirm ${service.name} connection. You can refresh or try again if needed.`,
+            "info",
+          );
+        }
+      } catch (error) {
+        toast.show(
+          error instanceof Error
+            ? error.message
+            : "Failed to start OAuth2 connection",
+          "error",
+        );
+      } finally {
+        setBusyServiceId(null);
+      }
+    },
+    [token, loadData, toast],
+  );
 
   const handleConnect = useCallback(
     (service: ServiceWithConnection) => {
@@ -102,13 +165,10 @@ export default function SettingsPage() {
         setApiKeyInput("");
         setApiKeyModalVisible(true);
       } else if (auth.type === "oauth2") {
-        toast.show(
-          "OAuth2 authentication is not supported in mobile app yet",
-          "error",
-        );
+        void startOAuthConnection(service);
       }
     },
-    [toast],
+    [startOAuthConnection],
   );
 
   const handleApiKeySubmit = useCallback(async () => {
@@ -193,7 +253,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#111827" />
