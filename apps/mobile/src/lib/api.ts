@@ -179,6 +179,15 @@ export async function executeWorkflow(
   );
 }
 
+export async function deleteWorkflow(
+  id: string,
+  token?: string,
+): Promise<void> {
+  await request<void>("DELETE", `/workflows/${encodeURIComponent(id)}`, {
+    token,
+  });
+}
+
 export async function getRun(
   runId: string,
   token?: string,
@@ -292,6 +301,17 @@ export async function disconnectService(
   return await request<{ success: boolean }>(
     "DELETE",
     `/api/service-auth/disconnect/${encodeURIComponent(serviceId)}`,
+    { token },
+  );
+}
+
+export async function initiateOAuth2Connection(
+  serviceId: string,
+  token: string,
+): Promise<{ authorizationUrl: string }> {
+  return await request<{ authorizationUrl: string }>(
+    "GET",
+    `/api/service-auth/connect/${encodeURIComponent(serviceId)}`,
     { token },
   );
 }

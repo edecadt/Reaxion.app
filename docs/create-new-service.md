@@ -150,4 +150,4 @@ This repository loads its integrations (“services”) dynamically from the `se
 
 - **Manifest-only service**: you can create `services/my-service/manifest.json` that follows the schema in `apps/backend/src/services/manifest.types.ts`. This fits when the service has no custom logic; otherwise provide an `index.ts` exporting either a `PluginHandler` or a service built with `@area/sdk`.
 - **Extra dependencies**: add any library you need to the service’s `package.json`, then rerun `pnpm install` at the root so the workspace picks it up.
-- **Deployment**: ensure every required environment variable (`GITHUB_CLIENT_ID`, etc.) is set in the target environment before shipping the service.
+- **Deployment**: ensure every required environment variable (for example, `GITHUB_CLIENT_ID_ACTION`, `GITHUB_CLIENT_SECRET_ACTION`) is set in the target environment before shipping the service.

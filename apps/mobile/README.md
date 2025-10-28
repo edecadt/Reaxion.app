@@ -72,7 +72,7 @@ Scénarios rapides
   3. Ajoutez un second nœud, choisissez `timer` puis Réaction `log` et entrez un message + niveau.
   4. Chaînez le premier nœud vers le second via `next`.
   5. Corrigez les validations si besoin, puis “Créer”.
-  6. Dans le récap, vous pouvez “Activer” et “Exécuter maintenant”.
+  6. Dans le récap, vous pouvez “Activer” le workflow.
 - Webhook → Log
   1. Créez un nœud `test-webhook` → Trigger `on-test-webhook` (pas de paramètres).
   2. Ajoutez un nœud `timer` → Réaction `log` et renseignez le message.
@@ -82,7 +82,7 @@ Scénarios rapides
 
 Étapes pour tester
 
-- Créer un workflow, l’activer, l’exécuter, vérifier le runId.
+- Créer un workflow, l’activer, vérifier son fonctionnement automatique.
 - Tester le webhook avec un POST, puis observer le déclenchement.
 
 Notes UI

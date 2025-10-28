@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -45,8 +46,34 @@ export default function MobileWorkflowBuilder() {
   const [saving, setSaving] = useState(false);
 
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [pickerNodeId, setPickerNodeId] = useState<string | null>(null);
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    overlayOpacity.stopAnimation();
+    if (pickerVisible) {
+      setModalVisible(true);
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && !pickerVisible) {
+          setModalVisible(false);
+          setPickerMode(null);
+          setPickerNodeId(null);
+        }
+      });
+    }
+  }, [overlayOpacity, pickerVisible]);
 
   useEffect(() => {
     const loadServices = async () => {
@@ -116,8 +143,6 @@ export default function MobileWorkflowBuilder() {
 
   const closePicker = () => {
     setPickerVisible(false);
-    setPickerMode(null);
-    setPickerNodeId(null);
   };
 
   const handleSave = async () => {
@@ -384,9 +409,18 @@ export default function MobileWorkflowBuilder() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Annuler la création du workflow"
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={styles.backButton}
+          >
+            <Feather name="arrow-left" size={22} color="#111827" />
+          </Pressable>
           <TextInput
             style={styles.nameInput}
             value={workflowName}
@@ -570,9 +604,19 @@ export default function MobileWorkflowBuilder() {
                             </Text>
                           ) : (
                             inputKeys.map((key) => {
-                              const type = (
-                                inputDefinition[key] || "string"
-                              ).toLowerCase();
+                              const definition = inputDefinition[key];
+                              const type =
+                                typeof definition === "string"
+                                  ? definition.toLowerCase()
+                                  : definition &&
+                                      typeof definition === "object" &&
+                                      "type" in definition &&
+                                      typeof (definition as { type?: unknown })
+                                        .type === "string"
+                                    ? String(
+                                        (definition as { type: string }).type,
+                                      ).toLowerCase()
+                                    : "string";
                               const params = node.data.params || {};
                               const value = params[key];
 
@@ -679,12 +723,16 @@ export default function MobileWorkflowBuilder() {
       </View>
 
       <Modal
-        visible={pickerVisible}
+        visible={modalVisible}
         animationType="slide"
         transparent={true}
         onRequestClose={closePicker}
       >
         <View style={styles.modalOverlay}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.modalBackdrop, { opacity: overlayOpacity }]}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -732,6 +780,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
   },
   saveButton: {
     backgroundColor: "#8b5cf6",
@@ -937,8 +995,15 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalContent: {
     backgroundColor: "#fff",
