@@ -8,12 +8,11 @@ import {
   View,
   ActivityIndicator,
 } from "react-native";
-import { isApiConfigured, tryGetApiUrl } from "../src/lib/api-config";
+import { isApiConfigured } from "../src/lib/api-config";
 import { useAuth } from "../src/hooks/useAuth";
 
 export default function Home() {
   const apiOk = isApiConfigured();
-  const apiUrl = tryGetApiUrl();
   const { isAuthenticated, user, loading, logout } = useAuth({
     required: false,
   });
@@ -43,12 +42,7 @@ export default function Home() {
             http://localhost:8080), puis relancez l&apos;app.
           </Text>
         </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>API</Text>
-          <Text style={styles.cardText}>Base URL: {apiUrl}</Text>
-        </View>
-      )}
+      ) : null}
 
       {isAuthenticated ? (
         <>

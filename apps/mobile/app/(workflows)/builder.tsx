@@ -384,9 +384,18 @@ export default function MobileWorkflowBuilder() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Annuler la création du workflow"
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={styles.backButton}
+          >
+            <Feather name="arrow-left" size={22} color="#111827" />
+          </Pressable>
           <TextInput
             style={styles.nameInput}
             value={workflowName}
@@ -570,9 +579,19 @@ export default function MobileWorkflowBuilder() {
                             </Text>
                           ) : (
                             inputKeys.map((key) => {
-                              const type = (
-                                inputDefinition[key] || "string"
-                              ).toLowerCase();
+                              const definition = inputDefinition[key];
+                              const type =
+                                typeof definition === "string"
+                                  ? definition.toLowerCase()
+                                  : definition &&
+                                      typeof definition === "object" &&
+                                      "type" in definition &&
+                                      typeof (definition as { type?: unknown })
+                                        .type === "string"
+                                    ? String(
+                                        (definition as { type: string }).type,
+                                      ).toLowerCase()
+                                    : "string";
                               const params = node.data.params || {};
                               const value = params[key];
 
@@ -732,6 +751,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
   },
   saveButton: {
     backgroundColor: "#8b5cf6",
