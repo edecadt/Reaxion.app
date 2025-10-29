@@ -1,0 +1,68 @@
+{
+  "client": {
+    "host": "127.0.0.1"
+  },
+  "server": {
+    "current_time": 1730135370,
+    "services": [
+      {
+        "id": "github",
+        "name": "github",
+        "auth": {
+          "type": "oauth2",
+          "scopes": ["repo", "user"]
+        },
+        "actions": [
+          {
+            "id": "issue-created",
+            "name": "Issue Created",
+            "description": "Triggers when a new issue is opened on the repository."
+          },
+          {
+            "id": "pull-request-opened",
+            "name": "Pull Request Opened",
+            "description": "Triggers when a new pull request is opened."
+          }
+        ],
+        "reactions": []
+      },
+      {
+        "id": "discord",
+        "name": "discord",
+        "auth": {
+          "type": "none"
+        },
+        "actions": [
+          {
+            "id": "message-received",
+            "name": "Message Received",
+            "description": "Triggers when a message is posted in a configured channel."
+          }
+        ],
+        "reactions": [
+          {
+            "id": "send-webhook-message",
+            "name": "Send Webhook Message",
+            "description": "Send a text message to a Discord channel via webhook URL."
+          }
+        ]
+      },
+      {
+        "id": "openai",
+        "name": "openai",
+        "auth": {
+          "type": "api_key",
+          "keyName": "OPENAI_API_KEY"
+        },
+        "actions": [],
+        "reactions": [
+          {
+            "id": "generate-completion",
+            "name": "Prompt",
+            "description": "Send a prompt to OpenAI and receive a completion response."
+          }
+        ]
+      }
+    ]
+  }
+}
