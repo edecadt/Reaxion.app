@@ -28,7 +28,19 @@ function AuthCallback() {
       setAuthToken(token);
 
       try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
+        const [, payloadSegment] = token.split(".");
+
+        if (!payloadSegment) {
+          throw new Error("Invalid token structure");
+        }
+
+        const normalizedPayload = payloadSegment
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+        const paddedPayload =
+          normalizedPayload +
+          "=".repeat((4 - (normalizedPayload.length % 4)) % 4);
+        const payload = JSON.parse(atob(paddedPayload));
         setUser({
           id: payload.sub,
           email: payload.email,

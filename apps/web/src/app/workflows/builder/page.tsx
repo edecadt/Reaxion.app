@@ -2,7 +2,7 @@
 
 import type { Workflow } from "@reaxion/common";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import type { Node, Edge } from "reactflow";
 
 import { ThemeToggle } from "../../../components/theme/ThemeToggle";
@@ -68,7 +68,7 @@ function getInputMetadata(value: InputDefinitionValue): {
   };
 }
 
-export default function WorkflowBuilderPage() {
+function WorkflowBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const workflowId = searchParams.get("id");
@@ -1249,5 +1249,19 @@ export default function WorkflowBuilderPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function WorkflowBuilderPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid h-screen w-full place-items-center text-sm text-[hsl(var(--muted-foreground))]">
+          Loading workflow builder...
+        </div>
+      }
+    >
+      <WorkflowBuilderContent />
+    </Suspense>
   );
 }

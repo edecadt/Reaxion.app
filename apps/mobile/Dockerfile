@@ -1,68 +1,17 @@
-FROM node:20-bookworm-slim AS base
-WORKDIR /app
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-     openjdk-17-jdk curl unzip git ca-certificates openssh-client \
-  && rm -rf /var/lib/apt/lists/* \
-  && corepack enable
-FROM base AS android-sdk
-ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH="$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
-RUN mkdir -p /opt/android-sdk/cmdline-tools \
-  && curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-  && mkdir -p /opt/android-sdk/cmdline-tools/temp \
-  && unzip -q /tmp/cmdtools.zip -d /opt/android-sdk/cmdline-tools/temp \
-  && mv /opt/android-sdk/cmdline-tools/temp/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
-  && rm -rf /opt/android-sdk/cmdline-tools/temp /tmp/cmdtools.zip \
-  && yes | sdkmanager --licenses \
-  && sdkmanager \
-       "platform-tools" \
-       "platforms;android-34" \
-       "build-tools;34.0.0"
-FROM android-sdk AS pruner
-WORKDIR /app
-COPY . .
-RUN mkdir -p /app/out \
-  && (npx turbo prune --scope=mobile --docker --out-dir=/app/out || \
-     (echo "turbo prune failed; falling back to full workspace" && \
-      mkdir -p /app/out/full && \
-      sh -c "tar -cf - . --exclude='./out' | tar -C /app/out/full -xf -" && \
-      cp pnpm-lock.yaml /app/out/pnpm-lock.yaml))
-FROM android-sdk AS installer
-WORKDIR /app
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=pruner /app/out/full/ ./
-RUN pnpm install --frozen-lockfile
-FROM installer AS builder
-ENV EXPO_NO_TELEMETRY=1
-ENV CI=1
-ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH="$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
-ENV GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx1536m -Dorg.gradle.parallel=false"
-WORKDIR /app/apps/mobile
-RUN pnpm exec expo prebuild -p android --non-interactive || true
-RUN if [ -d "android" ]; then \
-      cd android && \
-      ./gradlew assembleDebug \
-        --no-daemon \
-        --max-workers=1 \
-        -x lint \
-        -x lintVitalRelease \
-        --no-build-cache || echo "Gradle build failed"; \
-    fi
-RUN mkdir -p /tmp/apk && \
-    if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then \
-      cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/apk/client.apk && \
-      echo "APK built successfully"; \
-    else \
-      echo "APK build failed - check logs above" > /tmp/apk/placeholder.txt; \
-    fi
+FROM reactnativecommunity/react-native-android:latest
 
-FROM busybox:stable AS runner
-VOLUME ["/shared-apk"]
+RUN npm install -g pnpm@9.0.0 turbo
+
+WORKDIR /app
+
+COPY . .
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm turbo run build --filter=mobile...
+
+WORKDIR /app/apps/mobile
+
 RUN mkdir -p /shared-apk
-COPY --from=builder /tmp/apk/* /shared-apk/
-CMD ["sh", "-c", "tail -f /dev/null"]
+RUN chmod +x ./docker-entrypoint.sh
+CMD ["bash", "./docker-entrypoint.sh"]

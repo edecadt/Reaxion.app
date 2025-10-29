@@ -33,6 +33,17 @@ type ServiceWithConnection = AboutService & {
   isConnected: boolean;
 };
 
+type ApiKeyAuth = Extract<AboutServiceAuth, { type: "api_key" }>;
+
+function isApiKeyAuth(auth: AboutService["auth"]): auth is ApiKeyAuth {
+  return (
+    typeof auth === "object" &&
+    auth !== null &&
+    "type" in auth &&
+    (auth as AboutServiceAuth).type === "api_key"
+  );
+}
+
 function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,6 +57,10 @@ function SettingsContent() {
   const [selectedService, setSelectedService] =
     useState<ServiceWithConnection | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
+  const selectedServiceAuth = selectedService?.auth;
+  const apiKeyAuth = isApiKeyAuth(selectedServiceAuth)
+    ? selectedServiceAuth
+    : undefined;
 
   useEffect(() => {
     setToken(getAuthToken());
@@ -404,13 +419,11 @@ function SettingsContent() {
         title={`Connect ${selectedService?.name || ""}`}
       >
         <div className="space-y-4">
-          {selectedService?.auth &&
-            (selectedService.auth as AboutServiceAuth).type === "api_key" &&
-            (selectedService.auth as AboutServiceAuth).description && (
-              <p className="text-sm text-muted-foreground">
-                {(selectedService.auth as AboutServiceAuth).description}
-              </p>
-            )}
+          {apiKeyAuth?.description && (
+            <p className="text-sm text-muted-foreground">
+              {apiKeyAuth.description}
+            </p>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="apiKey">API Key</Label>

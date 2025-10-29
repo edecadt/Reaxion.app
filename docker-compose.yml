@@ -84,7 +84,8 @@ services:
     build:
       context: .
       dockerfile: apps/mobile/Dockerfile
-      target: runner
+    environment:
+      - EAS_PROJECT_ROOT=apps/mobile
     volumes:
       - apk_shared:/shared-apk
 
