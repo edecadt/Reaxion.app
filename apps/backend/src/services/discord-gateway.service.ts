@@ -143,7 +143,7 @@ export class DiscordGatewayService implements OnModuleInit, OnModuleDestroy {
         // Workaround: check if actionId is the name instead of ID
         const actionNameMap: Record<string, string> = {
           'message-received': 'Message Received',
-          'member-join': 'Member Left',
+          'member-join': 'Member Joined',
           'member-leave': 'Member Left',
           'reaction-added': 'Reaction Added',
         };
