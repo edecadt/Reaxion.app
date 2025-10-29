@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
 import { getAuthToken, getUser, clearAuth } from "../lib/auth";
 
 export function useAuth(options?: { redirectTo?: string; required?: boolean }) {

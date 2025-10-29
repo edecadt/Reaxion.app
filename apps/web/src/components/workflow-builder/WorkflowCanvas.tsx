@@ -8,7 +8,6 @@ import ReactFlow, {
   addEdge,
   useNodesState,
   useEdgesState,
-  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -17,8 +16,6 @@ import ReactFlow, {
   type OnEdgesChange,
   BackgroundVariant,
   MarkerType,
-  type EdgeChange,
-  applyEdgeChanges,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -194,7 +191,7 @@ export function WorkflowCanvas({
     [onNodesDelete],
   );
 
-  const handleEdgesDelete = useCallback((deleted: Edge[]) => {}, []);
+  const handleEdgesDelete = useCallback(() => {}, []);
 
   const onReconnect = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {

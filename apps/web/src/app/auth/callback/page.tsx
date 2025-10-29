@@ -28,7 +28,11 @@ function AuthCallback() {
       setAuthToken(token);
 
       try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
+        const parts = token.split(".");
+        if (parts.length < 2 || !parts[1]) {
+          throw new Error("Invalid JWT format");
+        }
+        const payload = JSON.parse(atob(parts[1]));
         setUser({
           id: payload.sub,
           email: payload.email,
