@@ -128,9 +128,30 @@ export class DiscordGatewayService implements OnModuleInit, OnModuleDestroy {
   ) {
     const activeWorkflows = this.workflowRepository.getActiveWorkflows();
 
+    this.logger.debug(
+      `Broadcasting ${serviceId}:${actionId} to ${activeWorkflows.length} active workflows`,
+    );
+
+    let storedCount = 0;
+
     for (const workflow of activeWorkflows) {
-      const hasDiscordAction = workflow.nodes.some(
-        (node) => node.serviceId === serviceId && node.actionId === actionId,
+      // Support both actionId (correct) and action name (legacy bug)
+      const hasDiscordAction = workflow.nodes.some((node) => {
+        if (node.serviceId !== serviceId) return false;
+        // Check if actionId matches (correct) OR if it matches the action name (bug workaround)
+        if (node.actionId === actionId) return true;
+        // Workaround: check if actionId is the name instead of ID
+        const actionNameMap: Record<string, string> = {
+          'message-received': 'Message Received',
+          'member-join': 'Member Left',
+          'member-leave': 'Member Left',
+          'reaction-added': 'Reaction Added',
+        };
+        return node.actionId === actionNameMap[actionId];
+      });
+
+      this.logger.debug(
+        `Workflow ${workflow.id}: hasDiscordAction=${hasDiscordAction}, webhookToken=${!!workflow.webhookToken}, userId=${workflow.userId}, nodes=${JSON.stringify(workflow.nodes.map((n) => ({ serviceId: n.serviceId, actionId: n.actionId })))}`,
       );
 
       if (hasDiscordAction && workflow.webhookToken) {
@@ -141,12 +162,21 @@ export class DiscordGatewayService implements OnModuleInit, OnModuleDestroy {
           workflow.userId?.toString(),
           workflow.webhookToken,
         );
+        storedCount++;
+        this.logger.debug(
+          `Stored event for workflow ${workflow.id} (userId=${workflow.userId}, token=${workflow.webhookToken})`,
+        );
       }
     }
+
+    this.logger.debug(
+      `Stored ${storedCount} events for ${serviceId}:${actionId}`,
+    );
   }
 
   private handleMessageCreate(message: Message) {
-    if (message.author.bot) return;
+    // Don't process messages from the bot itself to avoid loops
+    if (message.author.id === this.client?.user?.id) return;
 
     const payload = {
       messageId: message.id,
@@ -158,6 +188,9 @@ export class DiscordGatewayService implements OnModuleInit, OnModuleDestroy {
       content: message.content,
       createdAt: message.createdAt.toISOString(),
       messageUrl: message.url,
+      isBot: message.author.bot,
+      isWebhook: message.webhookId !== null && message.webhookId !== undefined,
+      roles: message.member?.roles?.cache.map((r) => r.id) || [],
       attachments: message.attachments.map((att) => ({
         id: att.id,
         url: att.url,

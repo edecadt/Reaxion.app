@@ -56,19 +56,21 @@ export class WebhookEventsService {
   getUnprocessedEvents(
     serviceId: string,
     webhookId: string,
-    userId?: string,
+    userId?: string | number,
     workflowToken?: string,
   ): WebhookEvent[] {
     const key = `${serviceId}:${webhookId}`;
     const events = this.events.get(key) || [];
+
+    const normalizedUserId = userId !== undefined ? String(userId) : undefined;
 
     return events.filter((event) => {
       if (event.processed) return false;
 
       if (
         event.userId !== undefined &&
-        userId !== undefined &&
-        event.userId !== userId
+        normalizedUserId !== undefined &&
+        event.userId !== normalizedUserId
       ) {
         return false;
       }
@@ -88,15 +90,28 @@ export class WebhookEventsService {
   getLastUnprocessedEvent(
     serviceId: string,
     webhookId: string,
-    userId?: string,
+    userId?: string | number,
     workflowToken?: string,
   ): WebhookEvent | null {
+    const key = `${serviceId}:${webhookId}`;
+    const allEvents = this.events.get(key) || [];
+
+    this.logger.debug(
+      `Looking for event: serviceId=${serviceId}, webhookId=${webhookId}, userId=${userId} (${typeof userId}), token=${workflowToken}`,
+    );
+    this.logger.debug(
+      `Available events (${allEvents.length}): ${JSON.stringify(allEvents.map((e) => ({ userId: e.userId, userIdType: typeof e.userId, token: e.workflowToken, processed: e.processed })))}`,
+    );
+
     const events = this.getUnprocessedEvents(
       serviceId,
       webhookId,
       userId,
       workflowToken,
     );
+
+    this.logger.debug(`Filtered to ${events.length} unprocessed events`);
+
     return events.length > 0 ? (events[events.length - 1] ?? null) : null;
   }
 

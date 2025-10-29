@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle, XCircle } from "lucide-react";
 
 import { Alert } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
