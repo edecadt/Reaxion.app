@@ -1,395 +1,308 @@
 # ACTION-REACTION
 
-Une plateforme d'automatisation complète inspirée de IFTTT et Zapier, développée avec une architecture moderne et multi-clients.
+> Automation platform in the spirit of IFTTT/Zapier. Connect third-party services, detect events (Actions), and react automatically (REActions) across web, mobile, and API clients.
 
-## 📋 Table des matières
+## 📚 Table of Contents
 
-- [Vue d'ensemble](#vue-densemble)
+- [Project Overview](#project-overview)
 - [Architecture](#architecture)
-- [Stack technique](#stack-technique)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Utilisation](#utilisation)
+- [Tech Stack](#tech-stack)
+- [Installation & Setup](#installation--setup)
+- [Running Locally](#running-locally)
 - [API Documentation](#api-documentation)
-- [Services disponibles](#services-disponibles)
-- [Développement](#développement)
-- [Déploiement](#déploiement)
-- [Contribution](#contribution)
+- [Services Catalogue](#services-catalogue)
+- [Environment Variables](#environment-variables)
+- [Additional Resources](#additional-resources)
 
-## 🎯 Vue d'ensemble
+## Project Overview
 
-Action-Reaction est une suite logicielle permettant aux utilisateurs de créer des automatisations (AREA) en interconnectant des **Actions** (déclencheurs) et des **REActions** (actions à exécuter) provenant de différents services externes.
+Action-Reaction lets users compose **AREA** automations by pairing an event _Action_ from one integration with a follow-up _REAction_ from another. Automations can be created from the web dashboard, the Android app, or via REST APIs.
 
-### Fonctionnalités principales
+Core capabilities:
 
-- **Gestion utilisateur** : Inscription, authentification (email/mot de passe + OAuth2)
-- **Services multiples** : Intégration avec des services externes (Google, Facebook, OneDrive, etc.)
-- **AREA personnalisables** : Création d'automatisations Action → REAction
-- **Hooks automatiques** : Système de surveillance et déclenchement automatique
-- **Clients multiples** : Interface web, mobile Android et API REST
+- Secure authentication (email/password + OAuth2 providers).
+- Service directory with OAuth/API-key/on-prem integrations.
+- Workflow engine with polling, webhooks, manual triggers, and execution logs.
+- Clients: REST API (NestJS), web frontend (Next.js), Android app (React Native/Expo).
 
-## 🏗️ Architecture
+## Architecture
 
-Le projet suit une architecture en monorepo avec trois composants principaux :
+Monorepo managed with pnpm and Turborepo. Each integration is a lightweight package in the `services/` directory and is discovered dynamically by the backend.
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Mobile Client  │    │   Web Client    │    │   REST API      │
-│  (React Native) │◄───┤   (Next.js)     │◄───┤   (NestJS)      │
-│                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                               │
-                                               ▼
-                                         ┌─────────────────┐
-                                         │   Database      │
-                                         │   (PostgreSQL)  │
-                                         │   + Redis       │
-                                         └─────────────────┘
+┌────────────────┐      ┌────────────────┐      ┌────────────────┐
+│  Mobile App    │      │   Web Client   │      │   REST API     │
+│ (React Native) │◄─────┤   (Next.js)    │◄─────┤   (NestJS)     │
+└────────────────┘      └────────────────┘      └────────┬───────┘
+                                                          │
+                                                ┌─────────▼─────────┐
+                                                │ PostgreSQL + Redis │
+                                                └─────────┬─────────┘
+                                                          │
+                                                ┌─────────▼──────────┐
+                                                │     Services/      │
+                                                │  (Integrations)    │
+                                                └────────────────────┘
 ```
 
-### Composants
+- **apps/backend** – NestJS API, service registry, workflow engine.
+- **apps/web** – Next.js dashboard for creating and monitoring automations.
+- **apps/mobile** – Expo application that consumes the same APIs.
+- **services/** – Integration manifests + optional handlers (loaded dynamically).
+- **packages/** – Shared TypeScript types, SDK helpers, lint & TS configs.
 
-- **Backend** (`/apps/backend`) : Serveur d'application NestJS avec toute la logique métier
-- **Web** (`/apps/web`) : Client web Next.js pour l'interface utilisateur
-- **Mobile** (`/apps/mobile`) : Application mobile React Native/Expo pour Android
-- **Packages partagés** (`/packages`) : Configuration commune (ESLint, TypeScript, DTOs)
+## Tech Stack
 
-## 🚀 Stack technique
+**Backend** – NestJS 11, TypeScript, Prisma (PostgreSQL), Redis, Passport, Swagger.
+**Web** – Next.js/React, TypeScript, Tailwind CSS, React Query/Context.
+**Mobile** – React Native (Expo), TypeScript, secure storage for tokens.
+**DevOps** – Docker Compose, pnpm workspace, Turborepo, Jest, ESLint/Prettier.
 
-### Backend
+## Installation & Setup
 
-- **Framework** : NestJS (Node.js/TypeScript)
-- **Base de données** : PostgreSQL + Redis
-- **Authentication** : JWT + OAuth2 (Google, Facebook, etc.)
-- **API** : REST avec documentation automatique
+### Prerequisites
 
-### Frontend Web
+- Node.js 18+ and `pnpm` (preferred). Yarn/npm work but are not tested.
+- Docker & Docker Compose (for infrastructure and one-command start).
+- Git.
 
-- **Framework** : Next.js (React/TypeScript)
-- **Styling** : Tailwind CSS
-- **State Management** : React Context/Hooks
-
-### Mobile
-
-- **Framework** : React Native + Expo
-- **Platform** : Android (APK généré automatiquement)
-
-### DevOps
-
-- **Containerisation** : Docker + Docker Compose
-- **Monorepo** : Turbo + pnpm
-- **CI/CD** : Configuration pour développement et production
-
-## 📦 Installation
-
-### Prérequis
-
-- Node.js 18+
-- pnpm
-- Docker & Docker Compose
-- Git
-
-### Installation rapide
+### Clone & install
 
 ```bash
-# Cloner le repository
-git clone <url-du-projet>
+git clone https://github.com/<your-org>/action-reaction.git
 cd action-reaction
-
-# Installer les dépendances
 pnpm install
+```
 
-# Configuration de l'environnement
-cp .env.example .env
-# Éditer le fichier .env avec vos configurations
+### Configure environment
 
-# Lancer avec Docker Compose
+1. Copy the default environment: `cp apps/backend/.env.example .env` (or use the sample in `docs/env.example` when available).
+2. Set database credentials, JWT secret, OAuth client IDs/secrets, and third-party keys.
+3. Optional: configure mail provider credentials for password reset emails.
+
+### Start everything with Docker
+
+```bash
 docker-compose up --build
 ```
 
-### Installation pour développement
+Services boot with hot reload disabled (production-like). Containers expose:
+
+- API → http://localhost:8080
+- Web → http://localhost:8081
+- PostgreSQL → localhost:5432
+- Redis → localhost:6379
+- Shared APK → `./apps/web/public/client.apk`
+
+Stop containers with `docker-compose down`.
+
+## Running Locally
+
+Use this approach for iterative development.
+
+1. Start infrastructure (database, cache, background workers):
+   ```bash
+   docker-compose up postgres redis
+   ```
+2. Start the backend (NestJS):
+   ```bash
+   pnpm --filter backend start:dev
+   ```
+3. Start the Next.js web client:
+   ```bash
+   pnpm --filter web dev
+   ```
+4. Start the mobile app (Expo):
+   ```bash
+   pnpm --filter mobile start
+   # or build an Android APK
+   pnpm --filter mobile build:android
+   ```
+
+### Access points
+
+- REST API documentation (Swagger): http://localhost:8080/api/docs
+- API health: `GET http://localhost:8080/`
+- About manifest: `GET http://localhost:8080/about.json`
+- Web dashboard: http://localhost:8081
+- Android APK (served by web): http://localhost:8081/client.apk
+
+## API Documentation
+
+All routes live under `http://localhost:8080`. JWT bearer tokens protect authenticated endpoints. Swagger UI is available at `/api/docs` once the backend runs.
+
+### Authentication & Users
+
+| Method | Path                    | Description                                 | Auth   |
+| ------ | ----------------------- | ------------------------------------------- | ------ |
+| POST   | `/auth/register`        | Create a new user account.                  | Public |
+| POST   | `/auth/login`           | Authenticate via email/password.            | Public |
+| POST   | `/auth/forgot-password` | Send reset instructions.                    | Public |
+| POST   | `/auth/reset-password`  | Reset password with token.                  | Public |
+| GET    | `/auth/google`          | Start Google OAuth flow.                    | Public |
+| GET    | `/auth/google/callback` | Google OAuth callback (redirects with JWT). | Public |
+| GET    | `/auth/github`          | Start GitHub OAuth flow.                    | Public |
+| GET    | `/auth/github/callback` | GitHub OAuth callback (redirects with JWT). | Public |
+
+Example – register a user:
 
 ```bash
-# Installer les dépendances
-pnpm install
-
-# Démarrer les services de base (DB)
-docker-compose up postgres redis
-
-# Lancer le backend en mode dev
-pnpm --filter backend start:dev
-
-# Lancer le web client en mode dev
-pnpm --filter web dev
-
-# Générer l'APK mobile
-pnpm --filter mobile build:android
+curl -X POST http://localhost:8080/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "alice@example.com",
+    "password": "superSecret123",
+    "name": "Alice"
+  }'
 ```
 
-## ⚙️ Configuration
-
-### Variables d'environnement
-
-Créez un fichier `.env` à la racine du projet :
-
-```env
-# Base de données
-POSTGRES_USER=actionreaction
-POSTGRES_PASSWORD=votre_mot_de_passe
-POSTGRES_DB=actionreaction_db
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}
-
-# Redis
-REDIS_PASSWORD=votre_redis_password
-REDIS_PORT=6379
-REDIS_URL=redis://localhost:${REDIS_PORT}
-
-# Serveur
-BACKEND_NODE_ENV=development
-BACKEND_PORT=8080
-
-# Client Web
-WEB_NODE_ENV=development
-WEB_PORT=8081
-
-# OAuth2 (optionnel)
-GOOGLE_CLIENT_ID=votre_google_client_id
-GOOGLE_CLIENT_SECRET=votre_google_client_secret
-FACEBOOK_APP_ID=votre_facebook_app_id
-FACEBOOK_APP_SECRET=votre_facebook_app_secret
-
-# JWT
-JWT_SECRET=votre_jwt_secret_très_sécurisé
-```
-
-### Configuration des services OAuth2
-
-Pour utiliser l'authentification OAuth2, vous devez configurer les applications sur chaque plateforme :
-
-1. **Google** : [Console développeur Google](https://console.developers.google.com/)
-2. **Facebook** : [Facebook for Developers](https://developers.facebook.com/)
-
-## 🖥️ Utilisation
-
-### Accès aux applications
-
-Après avoir lancé `docker-compose up` :
-
-- **Interface web** : http://localhost:8081
-- **API REST** : http://localhost:8080
-- **Documentation API** : http://localhost:8080/api/docs
-- **APK Android** : http://localhost:8081/client.apk
-
-### Workflow utilisateur
-
-1. **Inscription/Connexion** : Créer un compte ou se connecter (email ou OAuth2)
-2. **Souscription aux services** : Lier ses comptes externes (Google, Facebook, etc.)
-3. **Création d'AREA** : Choisir une Action et une REAction pour créer une automatisation
-4. **Activation automatique** : Les hooks surveillent et déclenchent les AREA automatiquement
-
-### Exemple d'AREA
-
-**Gmail → OneDrive**
-
-- **Action** : "Réception d'un email avec pièce jointe"
-- **REAction** : "Sauvegarder la pièce jointe dans OneDrive"
-
-## 📚 API Documentation
-
-### Endpoints principaux
-
-#### Authentification
-
-```http
-POST /auth/register
-POST /auth/login
-POST /auth/oauth/google
-POST /auth/oauth/facebook
-```
-
-#### Services
-
-```http
-GET /services                    # Liste des services disponibles
-POST /services/{id}/subscribe    # S'abonner à un service
-DELETE /services/{id}/unsubscribe # Se désabonner d'un service
-```
-
-#### AREA
-
-```http
-GET /areas          # Lister mes AREA
-POST /areas         # Créer une AREA
-PUT /areas/{id}     # Modifier une AREA
-DELETE /areas/{id}  # Supprimer une AREA
-```
-
-#### About (requis)
-
-```http
-GET /about.json
-```
-
-Response :
+Successful response:
 
 ```json
 {
-  "client": {
-    "host": "10.101.53.35"
-  },
+  "user": { "id": 1, "email": "alice@example.com", "name": "Alice" },
+  "token": "<JWT access token>"
+}
+```
+
+### Service connections (`/api/service-auth`)
+
+| Method | Path                                       | Description                                              |
+| ------ | ------------------------------------------ | -------------------------------------------------------- |
+| GET    | `/api/service-auth/connections`            | List integrations linked to the current user.            |
+| GET    | `/api/service-auth/connections/:serviceId` | Retrieve connection details for one service.             |
+| GET    | `/api/service-auth/connect/:serviceId`     | Begin OAuth2 sign-in for a service (redirect or JSON).   |
+| POST   | `/api/service-auth/connect/api-key`        | Attach an API-key based service.                         |
+| DELETE | `/api/service-auth/connections/:serviceId` | Remove a linked service (disconnect).                    |
+| GET    | `/api/service-auth/callback/:serviceId`    | OAuth2 callback handler (redirects back to the web app). |
+
+All routes above require a bearer token except the OAuth callback. Example (request OAuth redirect URL as JSON):
+
+```bash
+curl -H "Authorization: Bearer <JWT>" \
+  -H "Accept: application/json" \
+  http://localhost:8080/api/service-auth/connect/github
+```
+
+### Workflows (`/workflows`)
+
+| Method | Path                          | Description                                 |
+| ------ | ----------------------------- | ------------------------------------------- |
+| POST   | `/workflows`                  | Create a workflow definition (AREA).        |
+| GET    | `/workflows`                  | List workflows (optional `?active=true`).   |
+| GET    | `/workflows/:id`              | Fetch a workflow definition.                |
+| PATCH  | `/workflows/:id`              | Update workflow metadata, nodes, or status. |
+| DELETE | `/workflows/:id`              | Remove a workflow.                          |
+| POST   | `/workflows/:id/activate`     | Mark workflow active.                       |
+| POST   | `/workflows/:id/deactivate`   | Mark workflow inactive.                     |
+| POST   | `/workflows/:id/execute`      | Run the workflow manually (returns run ID). |
+| GET    | `/workflows/:id/runs`         | List historical runs for a workflow.        |
+| GET    | `/workflows/runs/:runId`      | Inspect run status.                         |
+| GET    | `/workflows/runs/:runId/logs` | Retrieve execution logs for a run.          |
+
+### Webhooks (`/webhooks`)
+
+| Method | Path                               | Description                                      |
+| ------ | ---------------------------------- | ------------------------------------------------ |
+| ALL    | `/webhooks/:service/:event`        | Receive incoming webhook payloads.               |
+| ALL    | `/webhooks/:service/:event/:token` | Same as above, with workflow token verification. |
+
+### About manifest
+
+`GET /about.json` → returns the public manifest consumed by clients.
+
+Example request:
+
+```bash
+curl http://localhost:8080/about.json
+```
+
+Example response:
+
+```json
+{
+  "client": { "host": "127.0.0.1" },
   "server": {
-    "current_time": 1531680780,
+    "current_time": 1730135370,
     "services": [
       {
-        "name": "facebook",
+        "id": "github",
+        "name": "github",
+        "auth": { "type": "oauth2" },
         "actions": [
           {
-            "name": "new_message_in_group",
-            "description": "A new message is posted in the group"
+            "id": "issue-created",
+            "name": "Issue Created",
+            "description": "Triggers when a new issue is opened."
+          },
+          {
+            "id": "pull-request-opened",
+            "name": "Pull Request Opened",
+            "description": "Triggers when a PR is opened."
           }
         ],
-        "reactions": [
-          {
-            "name": "like_message",
-            "description": "The user likes a message"
-          }
-        ]
+        "reactions": []
       }
     ]
   }
 }
 ```
 
-## 🔌 Services disponibles
+The backend populates the `services` array dynamically from the contents of the `services/` directory at runtime.
 
-### Services d'exemple implémentés
+## Services Catalogue
 
-#### Social Media
+Below is the catalog currently bundled with the project. Each service is discoverable via `/about.json`.
 
-- **Facebook** : Messages, likes, nouveaux followers
-- **Twitter/X** : Tweets, mentions, hashtags
-- **Instagram** : Nouvelles photos, likes
+| Service ID     | Auth                                   | Key Actions                                                                                                                            | Key Reactions                   |
+| -------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `github`       | OAuth2 (repo, user)                    | `issue-created`, `issue-closed`, `issue-comment-created`, `pull-request-opened`, `pull-request-merged`, `pull-request-comment-created` | —                               |
+| `discord`      | None (bot token supplied per workflow) | `message-received`                                                                                                                     | `send-webhook-message`          |
+| `google`       | OAuth2 (Gmail + Calendar scopes)       | `gmail-email-received`, `calendar-event-created`                                                                                       | —                               |
+| `openai`       | API key                                | —                                                                                                                                      | `generate-completion`           |
+| `telegram`     | None (bot token supplied per workflow) | —                                                                                                                                      | `send-channel-message`          |
+| `timer`        | None                                   | `Cron`                                                                                                                                 | `wait`, `log`                   |
+| `weather`      | None                                   | —                                                                                                                                      | `current` (get current weather) |
+| `javascript`   | None                                   | —                                                                                                                                      | `run` (execute sandboxed JS)    |
+| `test-webhook` | None                                   | `on-test-webhook`                                                                                                                      | —                               |
 
-#### Cloud Storage
+Machine-readable example consumed by the web/mobile clients:
 
-- **OneDrive** : Nouveaux fichiers, partage
-- **Dropbox** : Synchronisation, collaboration
-
-#### Email
-
-- **Gmail** : Nouveaux emails, filtres
-- **Outlook 365** : Gestion des emails
-
-#### Utilitaires
-
-- **Timer** : Déclenchement temporel (date, heure)
-- **RSS** : Nouveaux articles
-
-## 👨‍💻 Développement
-
-### Structure du projet
-
-```
-.
-├── apps/                    # Applications
-│   ├── backend/            # Serveur NestJS
-│   ├── mobile/             # App React Native
-│   └── web/                # Client Next.js
-├── packages/               # Packages partagés
-│   ├── common/            # DTOs et types partagés
-│   ├── eslint-config/     # Configuration ESLint
-│   └── typescript-config/ # Configuration TypeScript
-├── docker-compose.yml     # Configuration Docker
-├── turbo.json            # Configuration Turbo
-└── pnpm-workspace.yaml   # Configuration pnpm
+```json
+{
+  "service": "github",
+  "actions": ["issue-created", "pull-request-opened"],
+  "reactions": ["send-webhook-message"]
+}
 ```
 
-### Scripts disponibles
+Replace the values above with the actual actions/reactions of interest when building workflow templates.
 
-```bash
-# Développement
-pnpm dev                    # Lancer tous les services en dev
-pnpm --filter backend dev   # Backend seulement
-pnpm --filter web dev       # Web seulement
+## Environment Variables
 
-# Build
-pnpm build                  # Build tous les projets
-pnpm --filter mobile build  # Build mobile APK
+Backend `.env` keys you will usually set:
 
-# Tests
-pnpm test                   # Lancer tous les tests
-pnpm lint                   # Linter le code
+- `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
+- `REDIS_URL`, `REDIS_PORT`, `REDIS_PASSWORD`
+- `PORT` or `BACKEND_PORT` (defaults to 8080)
+- `JWT_SECRET`
+- `RESEND_API_KEY` (optional, transactional emails)
+- OAuth credentials:
+  - `GOOGLE_CLIENT_ID_ACTION_REACTION`, `GOOGLE_CLIENT_SECRET_ACTION_REACTION`
+  - `GITHUB_CLIENT_ID_ACTION`, `GITHUB_CLIENT_SECRET_ACTION`
+- Third-party API keys per service (e.g. `OPENAI_API_KEY`)
+- Frontend URLs used during redirects: `FRONTEND_URL`, `MOBILE_REDIRECT_URL`
 
-# Base de données
-pnpm db:migrate            # Migrations
-pnpm db:seed              # Données de test
-```
+The web and mobile apps read their own `.env.local` files (see `apps/web/.env.example` and `apps/mobile/.env.example`).
 
-### Ajout d'un nouveau service
+## Additional Resources
 
-Voir le fichier [HOWTOCONTRIBUTE.md](./HOWTOCONTRIBUTE.md) pour le guide détaillé.
+- Developer onboarding & contribution workflow: [HOWTOCONTRIBUTE.md](./HOWTOCONTRIBUTE.md)
+- Service SDK guide: [docs/create-new-service.md](./docs/create-new-service.md)
+- Sample manifest payload for demos: [docs/about.sample.json](./docs/about.sample.json)
+- Optional diagrams (architecture, workflows, data model) can be stored under `docs/`
+- Planning & milestone decks should include benchmark, schedules, and the `/about.json` payload for each presentation.
 
-## 🐳 Déploiement
+## License
 
-### Avec Docker Compose
-
-```bash
-# Production
-docker-compose up --build
-
-# Développement avec hot-reload
-docker-compose --profile dev up --build
-```
-
-### Services Docker
-
-- **server** : Application backend (port 8080)
-- **client_web** : Interface web (port 8081)
-- **client_mobile** : Build de l'APK Android
-- **postgres** : Base de données
-- **redis** : Cache et sessions
-
-### Volumes partagés
-
-- **apk_shared** : Partage de l'APK entre mobile et web
-- **turbo-cache** : Cache Turbo pour les builds
-
-## 🤝 Contribution
-
-### Workflow de contribution
-
-1. Fork le projet
-2. Créer une branche feature (`git checkout -b feature/nouvelle-fonctionnalite`)
-3. Commit les changements (`git commit -am 'Ajout nouvelle fonctionnalité'`)
-4. Push la branche (`git push origin feature/nouvelle-fonctionnalite`)
-5. Créer une Pull Request
-
-### Standards de code
-
-- **TypeScript** strict activé
-- **ESLint** + **Prettier** pour le formatage
-- **Conventional Commits** pour les messages
-- **Tests** requis pour les nouvelles fonctionnalités
-
-### Structure des commits
-
-```
-type(scope): description
-
-feat(backend): ajout du service Instagram
-fix(mobile): correction de la navigation
-docs(readme): mise à jour de la documentation
-```
-
-## 📄 Licence
-
-Ce projet est développé dans le cadre d'un projet éducatif EPITECH.
-
-## 👥 Équipe
-
-Développé par une équipe d'étudiants EPITECH dans le cadre du projet Action-Reaction.
-
----
-
-Pour plus d'informations sur l'extension du projet, consultez [HOWTOCONTRIBUTE.md](./HOWTOCONTRIBUTE.md).
+Educational project developed at EPITECH (no commercial license provided).
