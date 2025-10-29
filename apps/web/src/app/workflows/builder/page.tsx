@@ -1,8 +1,10 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import type { Workflow } from "@reaxion/common";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, Suspense } from "react";
 import type { Node, Edge } from "reactflow";
 
 import { ThemeToggle } from "../../../components/theme/ThemeToggle";
@@ -12,7 +14,14 @@ import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { MobileWorkflowBuilder } from "../../../components/workflow-builder/MobileWorkflowBuilder";
-import { WorkflowCanvas } from "../../../components/workflow-builder/WorkflowCanvas";
+import NextDynamic from "next/dynamic";
+const WorkflowCanvas = NextDynamic(
+  () =>
+    import("../../../components/workflow-builder/WorkflowCanvas").then(
+      (m) => m.WorkflowCanvas,
+    ),
+  { ssr: false },
+);
 import {
   createWorkflow,
   getAbout,
@@ -68,7 +77,7 @@ function getInputMetadata(value: InputDefinitionValue): {
   };
 }
 
-export default function WorkflowBuilderPage() {
+function WorkflowBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const workflowId = searchParams.get("id");
@@ -1249,5 +1258,13 @@ export default function WorkflowBuilderPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function WorkflowBuilderPage() {
+  return (
+    <Suspense fallback={<div className="p-4">Loading builder…</div>}>
+      <WorkflowBuilderContent />
+    </Suspense>
   );
 }

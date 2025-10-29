@@ -329,7 +329,13 @@ function SettingsContent() {
                       </div>
                     )}
                     {(service.id === "discord" || service.name === "Discord") &&
-                      service.connection.metadata?.botToken && (
+                      Boolean(
+                        (
+                          service.connection.metadata as
+                            | Record<string, unknown>
+                            | undefined
+                        )?.["botToken"],
+                      ) && (
                         <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                           <Bot className="h-4 w-4" />
                           <span className="font-medium">
@@ -420,13 +426,17 @@ function SettingsContent() {
         title={`Connect ${selectedService?.name || ""}`}
       >
         <div className="space-y-4">
-          {selectedService?.auth &&
-            (selectedService.auth as AboutServiceAuth).type === "api_key" &&
-            (selectedService.auth as AboutServiceAuth).description && (
-              <p className="text-sm text-muted-foreground">
-                {(selectedService.auth as AboutServiceAuth).description}
-              </p>
-            )}
+          {(() => {
+            const auth = selectedService?.auth as AboutServiceAuth | undefined;
+            if (auth && auth.type === "api_key" && auth.description) {
+              return (
+                <p className="text-sm text-muted-foreground">
+                  {auth.description}
+                </p>
+              );
+            }
+            return null;
+          })()}
 
           <div className="space-y-2">
             <Label htmlFor="apiKey">API Key</Label>
