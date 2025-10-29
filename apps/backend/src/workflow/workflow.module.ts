@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import { WorkflowEngineService } from './services/workflow-engine.service';
@@ -14,7 +14,7 @@ import { WorkflowOwnershipGuard } from './guards/workflow-ownership.guard';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ServicesModule,
+    forwardRef(() => ServicesModule),
     ServiceAuthModule,
     ConfigModule,
   ],

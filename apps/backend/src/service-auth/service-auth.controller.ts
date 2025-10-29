@@ -238,6 +238,24 @@ export class ServiceAuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('connections/:serviceId/metadata')
+  async updateConnectionMetadata(
+    @CurrentUser() user: { sub: number; email: string } | { id: number },
+    @Param('serviceId') serviceId: string,
+    @Body() body: Record<string, unknown>,
+  ): Promise<ServiceConnectionResponseDto> {
+    const userId = 'sub' in user ? user.sub : user.id;
+
+    const connection = await this.serviceAuthService.updateConnectionMetadata(
+      userId,
+      serviceId,
+      body,
+    );
+
+    return this.serviceAuthService.toResponseDto(connection);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('disconnect/:serviceId')
   async disconnectService(
     @CurrentUser() user: { sub: number; email: string } | { id: number },

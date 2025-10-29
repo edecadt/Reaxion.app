@@ -6,4 +6,5 @@ export class ServiceConnectionResponseDto {
   isExpired!: boolean;
   createdAt!: Date;
   updatedAt!: Date;
+  metadata?: Record<string, unknown>;
 }

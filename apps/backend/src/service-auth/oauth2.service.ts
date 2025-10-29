@@ -203,7 +203,7 @@ export class OAuth2Service {
 
   private generateState(userId: number, serviceId: string): string {
     const state = randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
     this.stateStore.set(state, { userId, serviceId, expiresAt });
     return state;

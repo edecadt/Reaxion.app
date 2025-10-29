@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { ServiceConnection } from '@prisma/client';
+import { ServiceConnection, Prisma } from '@prisma/client';
 import { OAuth2Service, OAuth2TokenResponse } from './oauth2.service';
 import { ServiceRegistry } from '../services/service-registry.service';
 import { ConfigService } from '@nestjs/config';
@@ -202,6 +202,44 @@ export class ServiceAuthService {
     );
   }
 
+  async updateConnectionMetadata(
+    userId: number,
+    serviceId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<ServiceConnection> {
+    const connection = await this.getConnectionOrThrow(userId, serviceId);
+
+    const existingMetadata =
+      typeof connection.metadata === 'object' &&
+      connection.metadata !== null &&
+      !Array.isArray(connection.metadata)
+        ? (connection.metadata as Record<string, unknown>)
+        : {};
+
+    const updatedMetadata = {
+      ...existingMetadata,
+      ...metadata,
+    };
+
+    const updated = await this.prisma.serviceConnection.update({
+      where: {
+        userId_serviceId: {
+          userId,
+          serviceId,
+        },
+      },
+      data: {
+        metadata: updatedMetadata as Prisma.JsonObject,
+      },
+    });
+
+    this.logger.log(
+      `Updated metadata for user ${userId}, service ${serviceId}`,
+    );
+
+    return updated;
+  }
+
   async disconnectService(userId: number, serviceId: string): Promise<void> {
     const connection = await this.getConnection(userId, serviceId);
 
@@ -280,6 +318,12 @@ export class ServiceAuthService {
       isExpired: this.isTokenExpired(connection),
       createdAt: connection.createdAt,
       updatedAt: connection.updatedAt,
+      metadata:
+        typeof connection.metadata === 'object' &&
+        connection.metadata !== null &&
+        !Array.isArray(connection.metadata)
+          ? (connection.metadata as Record<string, unknown>)
+          : undefined,
     };
   }
 }

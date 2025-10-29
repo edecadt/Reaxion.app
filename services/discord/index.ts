@@ -10,10 +10,14 @@ import {
 import type { ActionContext } from "@area/sdk";
 
 const SERVICE_ID = "discord";
-const WEBHOOK_REACTION_ID = "send-webhook-message";
-const MESSAGE_RECEIVED_ACTION_ID = "message-received";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
-const ACTION_STATE_KEY = "__discordMessageReceived";
+
+const MESSAGE_RECEIVED_ACTION_ID = "message-received";
+const MEMBER_JOIN_ACTION_ID = "member-join";
+const MEMBER_LEAVE_ACTION_ID = "member-leave";
+const REACTION_ADDED_ACTION_ID = "reaction-added";
+
+const WEBHOOK_REACTION_ID = "send-webhook-message";
 
 function ensureWebhookUrl(value: unknown): string {
   const url = String(value ?? "").trim();
@@ -44,29 +48,27 @@ function resolveContent(
       "message",
       "content",
       "text",
-      "title",
+      "body",
       "description",
+      "summary",
+      "title",
     ];
 
     for (const key of preferredKeys) {
-      const value = previousOutput[key];
-      if (typeof value === "string" && value.trim()) {
-        return { content: truncateForDiscord(value), usedFallback: true };
+      const candidateValue = previousOutput[key];
+      if (candidateValue && typeof candidateValue === "string") {
+        const trimmed = candidateValue.trim();
+        if (trimmed) {
+          return { content: truncateForDiscord(trimmed), usedFallback: true };
+        }
       }
     }
 
-    const serialised = JSON.stringify(previousOutput, null, 2);
-    if (serialised) {
-      return {
-        content: truncateForDiscord(serialised),
-        usedFallback: true,
-      };
-    }
+    const fallbackContent = JSON.stringify(previousOutput, null, 2);
+    return { content: truncateForDiscord(fallbackContent), usedFallback: true };
   }
 
-  throw new Error(
-    "Message content is required (set the content field or provide usable previous output)",
-  );
+  throw new Error("No message content provided");
 }
 
 function truncateForDiscord(value: string): string {
@@ -78,368 +80,41 @@ function truncateForDiscord(value: string): string {
   return `${value.slice(0, LIMIT - 3)}...`;
 }
 
-function ensureBotToken(value: unknown): string {
-  const token = String(value ?? "").trim();
-  if (!token) {
-    throw new Error("Discord bot token is required");
-  }
-
-  return token;
-}
-
-function ensureSnowflake(value: unknown, label: string): string {
-  const id = String(value ?? "").trim();
-  if (!id) {
-    throw new Error(`${label} is required`);
-  }
-
-  if (!/^\d{5,}$/.test(id)) {
-    throw new Error(`${label} must be a numeric Discord snowflake`);
-  }
-
-  return id;
-}
-
-function ensureOptionalSnowflake(
-  value: unknown,
-  label: string,
-): string | undefined {
-  if (value === undefined || value === null || value === "") {
-    return undefined;
-  }
-
-  return ensureSnowflake(value, label);
-}
-
-function compareSnowflakes(a: string, b: string): number {
-  const aBig = BigInt(a);
-  const bBig = BigInt(b);
-  if (aBig === bBig) return 0;
-  return aBig > bBig ? 1 : -1;
-}
-
-type DiscordAPIUser = {
-  id: string;
-  username?: string;
-  global_name?: string | null;
-};
-
-type DiscordAPIMember = {
-  roles?: string[];
-  nick?: string | null;
-};
-
-type DiscordAPIMessage = {
-  id: string;
-  content: string;
-  author: DiscordAPIUser;
-  timestamp: string;
-  edited_timestamp?: string | null;
-  member?: DiscordAPIMember;
-  guild_id?: string;
-  channel_id: string;
-};
-
-type DiscordMessageChannelState = {
-  lastMessageId?: string;
-  guildId?: string;
-  memberRoleCache?: Record<string, string[]>;
-};
-
-type DiscordMessageActionState = {
-  botUserId?: string;
-  channels: Record<string, DiscordMessageChannelState>;
-};
-
-function normaliseContent(value: string): string {
-  return value.normalize("NFKC").toLowerCase();
-}
-
-function getStateRecord(ctx: ActionContext): Record<string, unknown> {
-  if (!ctx.state || typeof ctx.state !== "object" || ctx.state === null) {
-    ctx.state = {};
-  }
-
-  return ctx.state as Record<string, unknown>;
-}
-
-function ensureActionState(ctx: ActionContext): DiscordMessageActionState {
-  const stateRecord = getStateRecord(ctx);
-  const existing = stateRecord[ACTION_STATE_KEY];
-
-  if (
-    existing &&
-    typeof existing === "object" &&
-    existing !== null &&
-    "channels" in (existing as Record<string, unknown>)
-  ) {
-    return existing as DiscordMessageActionState;
-  }
-
-  const initial: DiscordMessageActionState = {
-    botUserId: undefined,
-    channels: {},
-  };
-  stateRecord[ACTION_STATE_KEY] = initial;
-  return initial;
-}
-
-function ensureChannelState(
-  actionState: DiscordMessageActionState,
-  channelId: string,
-): DiscordMessageChannelState {
-  const existing = actionState.channels[channelId];
-  if (existing && typeof existing === "object" && existing !== null) {
-    return existing;
-  }
-
-  const channelState: DiscordMessageChannelState = {};
-  actionState.channels[channelId] = channelState;
-  return channelState;
-}
-
-function updateChannelLastMessageId(
-  ctx: ActionContext,
-  previousState: DiscordMessageActionState,
-  channelId: string,
-  lastMessageId: string | undefined,
-): void {
-  const channelState = ensureChannelState(previousState, channelId);
-  const current = channelState.lastMessageId;
-  channelState.lastMessageId = lastMessageId;
-
-  ctx.logger?.log?.(
-    `[discord] Updated channel ${channelId} lastMessageId: ${current ?? "none"} -> ${lastMessageId ?? "none"}`,
-    "DiscordService",
-  );
-}
-
-async function ensureBotUserId(
-  ctx: ActionContext,
-  botToken: string,
-  state: DiscordMessageActionState,
-): Promise<string> {
-  if (state.botUserId) {
-    return state.botUserId;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(`${DISCORD_API_BASE}/users/@me`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bot ${botToken}`,
-      },
-    });
-  } catch (error) {
-    ctx.logger?.error?.(
-      `[discord] Failed to resolve bot identity: ${error instanceof Error ? error.message : String(error)}`,
-      "DiscordService",
-    );
-    throw new Error("Unable to fetch Discord bot identity");
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    ctx.logger?.warn?.(
-      `[discord] Failed to fetch bot identity (status ${response.status})${errorText ? `: ${errorText}` : ""}`,
-      "DiscordService",
-    );
-    throw new Error("Discord API rejected bot identity lookup");
-  }
-
-  const payload = (await response
-    .json()
-    .catch(() => ({}))) as Record<string, unknown>;
-  const botUserId = typeof payload.id === "string" ? payload.id.trim() : "";
-  if (!botUserId) {
-    throw new Error("Discord API did not return bot user id");
-  }
-
-  state.botUserId = botUserId;
-  ctx.logger?.log?.(
-    `[discord] Cached bot user id ${botUserId}`,
-    "DiscordService",
-  );
-
-  return botUserId;
-}
-
-async function ensureChannelGuildId(
-  ctx: ActionContext,
-  botToken: string,
-  state: DiscordMessageActionState,
-  channelId: string,
-): Promise<string | undefined> {
-  const channelState = ensureChannelState(state, channelId);
-  if (channelState.guildId) {
-    return channelState.guildId;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(`${DISCORD_API_BASE}/channels/${channelId}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bot ${botToken}`,
-      },
-    });
-  } catch (error) {
-    ctx.logger?.error?.(
-      `[discord] Failed to fetch channel metadata: ${error instanceof Error ? error.message : String(error)}`,
-      "DiscordService",
-    );
-    return undefined;
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    ctx.logger?.warn?.(
-      `[discord] Channel metadata request failed (status ${response.status})${errorText ? `: ${errorText}` : ""}`,
-      "DiscordService",
-    );
-    return undefined;
-  }
-
-  const payload = (await response
-    .json()
-    .catch(() => ({}))) as Record<string, unknown>;
-  const guildId =
-    typeof payload.guild_id === "string" ? payload.guild_id : undefined;
-
-  if (guildId) {
-    channelState.guildId = guildId;
-    ctx.logger?.log?.(
-      `[discord] Cached guild ${guildId} for channel ${channelId}`,
-      "DiscordService",
-    );
-  }
-
-  return guildId;
-}
-
-async function getMemberRoles(
-  ctx: ActionContext,
-  botToken: string,
-  state: DiscordMessageActionState,
-  channelId: string,
-  message: DiscordAPIMessage,
-): Promise<string[]> {
-  const authorId = message.author?.id;
-  if (!authorId) {
-    return [];
-  }
-
-  const channelState = ensureChannelState(state, channelId);
-  if (!channelState.memberRoleCache) {
-    channelState.memberRoleCache = {};
-  }
-
-  const cache = channelState.memberRoleCache;
-
-  if (cache[authorId]) {
-    return cache[authorId];
-  }
-
-  const messageRoles = Array.isArray(message.member?.roles)
-    ? message.member.roles.filter(
-        (role): role is string => typeof role === "string",
-      )
-    : [];
-
-  if (messageRoles.length > 0) {
-    cache[authorId] = messageRoles;
-    return messageRoles;
-  }
-
-  const guildId =
-    message.guild_id ??
-    (await ensureChannelGuildId(ctx, botToken, state, channelId));
-  if (!guildId) {
-    ctx.logger?.warn?.(
-      `[discord] Unable to resolve guild for channel ${channelId}; role filter skipped`,
-      "DiscordService",
-    );
-    cache[authorId] = [];
-    return [];
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(
-      `${DISCORD_API_BASE}/guilds/${guildId}/members/${authorId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bot ${botToken}`,
-        },
-      },
-    );
-  } catch (error) {
-    ctx.logger?.error?.(
-      `[discord] Failed to fetch member ${authorId} roles: ${error instanceof Error ? error.message : String(error)}`,
-      "DiscordService",
-    );
-    cache[authorId] = [];
-    return [];
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    ctx.logger?.warn?.(
-      `[discord] Unable to fetch member ${authorId} roles (status ${response.status})${errorText ? `: ${errorText}` : ""}`,
-      "DiscordService",
-    );
-    cache[authorId] = [];
-    return [];
-  }
-
-  const payload = (await response
-    .json()
-    .catch(() => ({}))) as Record<string, unknown>;
-  const roles = Array.isArray((payload as { roles?: unknown }).roles)
-    ? ((payload as { roles?: unknown }).roles as unknown[]).filter(
-        (role): role is string => typeof role === "string",
-      )
-    : [];
-
-  cache[authorId] = roles;
-  return roles;
-}
-
 export default createService({
   id: SERVICE_ID,
   name: "Discord",
-  version: "1.0.0",
+  version: "2.0.0",
   description:
-    "Trigger workflows from Discord messages and send messages via webhooks.",
+    "Trigger workflows from Discord events (messages, members, reactions) in real-time, and send messages via webhooks. Connect your Discord account to invite the bot to your servers.",
   logo: "https://cdn-icons-png.flaticon.com/512/5968/5968756.png",
-  auth: { type: "none" },
+  auth: {
+    type: "oauth2",
+    authorizationUrl: "https://discord.com/api/oauth2/authorize",
+    tokenUrl: "https://discord.com/api/oauth2/token",
+    scopes: ["identify", "guilds", "bot"],
+    clientIdEnvVar: "DISCORD_CLIENT_ID",
+    clientSecretEnvVar: "DISCORD_CLIENT_SECRET",
+    callbackUrlEnvVar: "DISCORD_CALLBACK_URL",
+  },
 
   actions: [
     createAction({
       id: MESSAGE_RECEIVED_ACTION_ID,
       name: "Message Received",
       description:
-        "Triggers when a new message is posted in the selected channel. You can filter by author, role, or content.",
+        "Triggered when a message is received in a Discord channel where the bot is present. Supports filtering by channel, server, author, role, and content.",
       input: {
-        botToken: passwordInput({
-          label: "Bot Token",
-          description:
-            "Discord bot token with access to read message history for the target channel.",
-          placeholder:
-            "MTEyMzQ1Njc4OTAxMjM0NTY3.abcdefghijklm_noPQRstuVWXyz",
-          validation: {
-            required: true,
-          },
-        }),
         channelId: textInput({
-          label: "Channel ID",
-          description: "Numeric ID of the channel to monitor.",
+          label: "Channel ID (Optional)",
+          description:
+            "Only trigger for messages in this specific channel (leave empty for all channels).",
           placeholder: "123456789012345678",
-          validation: {
-            required: true,
-          },
+        }),
+        guildId: textInput({
+          label: "Server ID (Optional)",
+          description:
+            "Only trigger for messages in this specific server/guild (leave empty for all servers).",
+          placeholder: "987654321098765432",
         }),
         userId: textInput({
           label: "Author User ID (Optional)",
@@ -450,7 +125,7 @@ export default createService({
         roleId: textInput({
           label: "Author Role ID (Optional)",
           description:
-            "Only trigger when the author has this role. Requires the bot to have the necessary guild permissions.",
+            "Only trigger when the author has this role.",
           placeholder: "234567890123456789",
         }),
         contentIncludes: textInput({
@@ -473,7 +148,6 @@ export default createService({
         }),
       },
       output: {
-        triggered: "boolean",
         messageId: "string",
         channelId: "string",
         guildId: "string",
@@ -482,298 +156,563 @@ export default createService({
         content: "string",
         createdAt: "string",
         messageUrl: "string",
-        rawMessage: "object",
       },
       run: async (params, ctx) => {
-        const botToken = ensureBotToken(params.botToken);
-        const channelId = ensureSnowflake(params.channelId, "Channel ID");
-        const userId = ensureOptionalSnowflake(params.userId, "Author User ID");
-        const roleId = ensureOptionalSnowflake(params.roleId, "Role ID");
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[discord] WebhookEventsService missing, cannot process events`,
+            "DiscordService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          MESSAGE_RECEIVED_ACTION_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          ctx.logger?.log?.(
+            `[discord] No unprocessed events for userId=${ctx.userId}, token=${ctx.workflowToken}`,
+            "DiscordService",
+          );
+          return null;
+        }
+
+        ctx.logger?.log?.(
+          `[discord] Found unprocessed event: ${JSON.stringify(event).substring(0, 200)}`,
+          "DiscordService",
+        );
+
+        const payload = event.payload as Record<string, unknown> | undefined;
+
+        if (!payload) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Apply filters from params
+        const channelIdFilter = String(params.channelId ?? "").trim();
+        const guildIdFilter = String(params.guildId ?? "").trim();
+        const userId = String(params.userId ?? "").trim();
+        const roleId = String(params.roleId ?? "").trim();
         const contentFilter = String(params.contentIncludes ?? "").trim();
         const includeWebhookMessages = Boolean(params.includeWebhookMessages);
         const includeBotMessages = Boolean(params.includeBotMessages);
 
-        const actionState = ensureActionState(ctx);
-        const channelState = ensureChannelState(actionState, channelId);
-        const lastProcessedId =
-          channelState && typeof channelState.lastMessageId === "string"
-            ? channelState.lastMessageId
-            : undefined;
+        const channelId = String(payload.channelId ?? "");
+        const guildId = String(payload.guildId ?? "");
+        const authorId = String(payload.authorId ?? "");
+        const isBot = Boolean(payload.isBot);
+        const isWebhook = Boolean(payload.isWebhook);
+        const content = String(payload.content ?? "");
+        const roles = Array.isArray(payload.roles) ? payload.roles as string[] : [];
 
-        if (!lastProcessedId) {
-          const bootstrapEndpoint = `${DISCORD_API_BASE}/channels/${channelId}/messages?limit=1&with_member=true`;
-
-          let bootstrapResponse: Response;
-          try {
-            bootstrapResponse = await fetch(bootstrapEndpoint, {
-              method: "GET",
-              headers: {
-                Authorization: `Bot ${botToken}`,
-              },
-            });
-          } catch (error) {
-            ctx.logger?.error?.(
-              `[discord] Failed to bootstrap message state: ${error instanceof Error ? error.message : String(error)}`,
-              "DiscordService",
-            );
-            throw new Error("Unable to initialise Discord channel state");
-          }
-
-          if (!bootstrapResponse.ok) {
-            const errorText = await bootstrapResponse.text().catch(() => "");
-            ctx.logger?.warn?.(
-              `[discord] Bootstrap request failed with ${bootstrapResponse.status}${errorText ? `: ${errorText}` : ""}`,
-              "DiscordService",
-            );
-            throw new Error(
-              `Discord API returned ${bootstrapResponse.status}${errorText ? `: ${errorText}` : ""}`,
-            );
-          }
-
-          const bootstrapMessages = (await bootstrapResponse.json().catch(
-            () => [],
-          )) as DiscordAPIMessage[];
-
-          if (Array.isArray(bootstrapMessages) && bootstrapMessages.length > 0) {
-            const newestId = bootstrapMessages[0]?.id;
-            if (newestId) {
-              updateChannelLastMessageId(
-                ctx,
-                actionState,
-                channelId,
-                newestId,
-              );
-              ctx.logger?.log?.(
-                `[discord] Initialised channel ${channelId} lastMessageId to ${newestId}`,
-                "DiscordService",
-              );
-            }
-          } else {
-            ctx.logger?.log?.(
-              `[discord] No messages found when initialising channel ${channelId}`,
-              "DiscordService",
-            );
-          }
-
-          return null;
-        }
-
-        const endpoint = `${DISCORD_API_BASE}/channels/${channelId}/messages?limit=100&with_member=true&after=${encodeURIComponent(lastProcessedId)}`;
-
-        let response: Response;
-        try {
-          response = await fetch(endpoint, {
-            method: "GET",
-            headers: {
-              Authorization: `Bot ${botToken}`,
-            },
-          });
-        } catch (error) {
-          ctx.logger?.error?.(
-            `[discord] Failed to fetch messages: ${error instanceof Error ? error.message : String(error)}`,
-            "DiscordService",
-          );
-          throw new Error("Unable to reach the Discord API to read messages");
-        }
-
-        if (!response.ok) {
-          let errorDetail = "";
-          try {
-            const body = await response.json();
-            if (body && typeof body === "object" && "message" in body) {
-              errorDetail = String((body as Record<string, unknown>).message);
-            }
-            if (
-              body &&
-              typeof body === "object" &&
-              "retry_after" in body &&
-              typeof (body as Record<string, unknown>).retry_after === "number"
-            ) {
-              errorDetail = `${errorDetail} (retry after ${(body as Record<string, unknown>).retry_after}s)`.trim();
-            }
-          } catch {
-            errorDetail = await response.text().catch(() => "");
-          }
-
-          ctx.logger?.warn?.(
-            `[discord] Discord API returned ${response.status}${errorDetail ? `: ${errorDetail}` : ""}`,
-            "DiscordService",
-          );
-          throw new Error(
-            `Discord API returned ${response.status}${
-              errorDetail ? `: ${errorDetail}` : ""
-            }`,
-          );
-        }
-
-        let messages: DiscordAPIMessage[];
-        try {
-          const parsed = (await response.json()) as unknown;
-          if (!Array.isArray(parsed)) {
-            throw new Error("Expected an array response");
-          }
-          messages = parsed as DiscordAPIMessage[];
-        } catch (error) {
-          ctx.logger?.error?.(
-            `[discord] Failed to parse Discord response: ${error instanceof Error ? error.message : String(error)}`,
-            "DiscordService",
-          );
-          throw new Error("Discord returned an unexpected payload");
-        }
-
-        if (messages.length === 0) {
+        // Filter: channel ID
+        if (channelIdFilter && channelId !== channelIdFilter) {
           ctx.logger?.log?.(
-            `[discord] No new messages after ${lastProcessedId} for channel ${channelId}`,
+            `[discord] Skipping message ${payload.messageId} (wrong channel)`,
             "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
           );
           return null;
         }
 
-        messages.sort((a, b) => compareSnowflakes(a.id, b.id));
+        // Filter: guild ID
+        if (guildIdFilter && guildId !== guildIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping message ${payload.messageId} (wrong server)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
 
-        let latestId = lastProcessedId;
-        for (const message of messages) {
-          if (!latestId || compareSnowflakes(message.id, latestId) > 0) {
-            latestId = message.id;
+        // Filter: webhook messages
+        if (!includeWebhookMessages && isWebhook) {
+          ctx.logger?.log?.(
+            `[discord] Skipping webhook message ${payload.messageId}`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: bot messages
+        if (!includeBotMessages && isBot) {
+          ctx.logger?.log?.(
+            `[discord] Skipping bot message ${payload.messageId}`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: user ID
+        if (userId && authorId !== userId) {
+          ctx.logger?.log?.(
+            `[discord] Skipping message ${payload.messageId} (author ${authorId} !== ${userId})`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: role ID
+        if (roleId && !roles.includes(roleId)) {
+          ctx.logger?.log?.(
+            `[discord] Skipping message ${payload.messageId} (author lacks role ${roleId})`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MESSAGE_RECEIVED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: content includes
+        if (contentFilter) {
+          const normalizedContent = content.normalize("NFKC").toLowerCase();
+          const normalizedFilter = contentFilter.normalize("NFKC").toLowerCase();
+
+          if (!normalizedContent.includes(normalizedFilter)) {
+            ctx.logger?.log?.(
+              `[discord] Skipping message ${payload.messageId} (content filter mismatch)`,
+              "DiscordService",
+            );
+            ctx.webhookEvents.markAsProcessed(
+              SERVICE_ID,
+              MESSAGE_RECEIVED_ACTION_ID,
+              event.timestamp,
+            );
+            return null;
           }
         }
 
         ctx.logger?.log?.(
-          `[discord] Polled ${messages.length} new messages (lastProcessed=${lastProcessedId}, latest=${latestId ?? "none"})`,
+          `[discord] Message received: ${payload.messageId} in channel ${payload.channelId}`,
           "DiscordService",
         );
 
-        const botUserId = await ensureBotUserId(ctx, botToken, actionState);
-
-        let candidate: DiscordAPIMessage | undefined;
-        for (const message of messages) {
-          if (
-            lastProcessedId &&
-            compareSnowflakes(message.id, lastProcessedId) <= 0
-          ) {
-            continue;
-          }
-
-          if (
-            !includeWebhookMessages &&
-            typeof message.webhook_id === "string" &&
-            message.webhook_id
-          ) {
-            ctx.logger?.log?.(
-              `[discord] Skipping message ${message.id} created by webhook ${message.webhook_id}`,
-              "DiscordService",
-            );
-            continue;
-          }
-
-          const authorId = message.author?.id;
-          if (!authorId) {
-            ctx.logger?.warn?.(
-              `[discord] Message ${message.id} missing author id`,
-              "DiscordService",
-            );
-            continue;
-          }
-
-          if (!includeBotMessages && message.author?.bot) {
-            ctx.logger?.log?.(
-              `[discord] Skipping message ${message.id} because author ${authorId} is a bot`,
-              "DiscordService",
-            );
-            continue;
-           }
-
-          if (authorId === botUserId) {
-            ctx.logger?.log?.(
-              `[discord] Skipping message ${message.id} authored by the bot itself`,
-              "DiscordService",
-            );
-            continue;
-          }
-
-          if (userId && authorId !== userId) {
-            continue;
-          }
-
-          if (roleId) {
-            const memberRoles = await getMemberRoles(
-              ctx,
-              botToken,
-              actionState,
-              channelId,
-              message,
-            );
-
-            if (!memberRoles.includes(roleId)) {
-              ctx.logger?.log?.(
-                `[discord] Skipping message ${message.id} because author ${authorId} lacks role ${roleId}`,
-                "DiscordService",
-              );
-              continue;
-            }
-          }
-
-          if (contentFilter) {
-            const contentRaw = message.content ?? "";
-            const normalisedContent = normaliseContent(contentRaw);
-            const normalisedFilter = normaliseContent(contentFilter);
-
-            if (!normalisedContent.includes(normalisedFilter)) {
-              ctx.logger?.log?.(
-                `[discord] Skipping message ${message.id} due to content filter mismatch (content="${contentRaw}")`,
-                "DiscordService",
-              );
-              continue;
-            }
-          }
-
-          candidate = message;
-          break;
-        }
-
-        if (!candidate) {
-          if (latestId && latestId !== lastProcessedId) {
-            updateChannelLastMessageId(
-              ctx,
-              actionState,
-              channelId,
-              latestId,
-            );
-          }
-          ctx.logger?.log?.(
-            `[discord] No new messages matched filters (user=${userId ?? "any"}, role=${roleId ?? "any"}, contains=${contentFilter || "any"})`,
-            "DiscordService",
-          );
-          return null;
-        }
-
-        updateChannelLastMessageId(ctx, actionState, channelId, candidate.id);
-
-        const guildId = candidate.guild_id ?? "";
-        const messageUrl = guildId
-          ? `https://discord.com/channels/${guildId}/${channelId}/${candidate.id}`
-          : `https://discord.com/channels/@me/${channelId}/${candidate.id}`;
-        const authorUsername =
-          candidate.author?.global_name ??
-          candidate.author?.username ??
-          "Unknown";
-
-        ctx.logger?.log?.(
-          `[discord] Detected new message ${candidate.id} in channel ${channelId} (author=${candidate.author?.id ?? "unknown"}, content="${(candidate.content ?? "").slice(0, 80)}")`,
-          "DiscordService",
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          MESSAGE_RECEIVED_ACTION_ID,
+          event.timestamp,
         );
 
         return {
-          triggered: true,
-          messageId: candidate.id,
-          channelId,
-          guildId,
-          authorId: candidate.author?.id ?? "",
-          authorUsername,
-          content: candidate.content ?? "",
-          createdAt: candidate.timestamp,
-          messageUrl,
-          rawMessage: candidate as unknown as Record<string, unknown>,
+          messageId: String(payload.messageId ?? ""),
+          channelId: String(payload.channelId ?? ""),
+          guildId: String(payload.guildId ?? ""),
+          authorId: String(payload.authorId ?? ""),
+          authorUsername: String(payload.authorUsername ?? ""),
+          content: String(payload.content ?? ""),
+          createdAt: String(payload.createdAt ?? ""),
+          messageUrl: String(payload.messageUrl ?? ""),
+        };
+      },
+    }),
+
+    createAction({
+      id: MEMBER_JOIN_ACTION_ID,
+      name: "Member Joined",
+      description:
+        "Triggered when a member joins a Discord server where the bot is present.",
+      input: {
+        guildId: textInput({
+          label: "Server ID (Optional)",
+          description:
+            "Only trigger for members joining this specific server/guild (leave empty for all servers).",
+          placeholder: "987654321098765432",
+        }),
+        ignoreBots: booleanInput({
+          label: "Ignore Bots",
+          description:
+            "If enabled, bot accounts joining will be ignored.",
+          defaultValue: true,
+        }),
+      },
+      output: {
+        userId: "string",
+        username: "string",
+        discriminator: "string",
+        joinedAt: "string",
+        isBot: "boolean",
+        guildId: "string",
+        guildName: "string",
+        memberCount: "number",
+      },
+      run: async (params, ctx) => {
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[discord] WebhookEventsService missing, cannot process events`,
+            "DiscordService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          MEMBER_JOIN_ACTION_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          return null;
+        }
+
+        const payload = event.payload as Record<string, unknown> | undefined;
+
+        if (!payload) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MEMBER_JOIN_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Apply filters
+        const guildIdFilter = String(params.guildId ?? "").trim();
+        const ignoreBots = Boolean(params.ignoreBots ?? true);
+
+        const guildId = String(payload.guildId ?? "");
+        const isBot = Boolean(payload.isBot);
+
+        // Filter: guild ID
+        if (guildIdFilter && guildId !== guildIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping member join ${payload.userId} (wrong server)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MEMBER_JOIN_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: bots
+        if (ignoreBots && isBot) {
+          ctx.logger?.log?.(
+            `[discord] Skipping bot member join ${payload.userId}`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MEMBER_JOIN_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        ctx.logger?.log?.(
+          `[discord] Member joined: ${payload.username} (${payload.userId}) in guild ${payload.guildId}`,
+          "DiscordService",
+        );
+
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          MEMBER_JOIN_ACTION_ID,
+          event.timestamp,
+        );
+
+        return {
+          userId: String(payload.userId ?? ""),
+          username: String(payload.username ?? ""),
+          discriminator: String(payload.discriminator ?? ""),
+          joinedAt: String(payload.joinedAt ?? ""),
+          isBot: Boolean(payload.isBot),
+          guildId: String(payload.guildId ?? ""),
+          guildName: String(payload.guildName ?? ""),
+          memberCount: Number(payload.memberCount ?? 0),
+        };
+      },
+    }),
+
+    createAction({
+      id: MEMBER_LEAVE_ACTION_ID,
+      name: "Member Left",
+      description:
+        "Triggered when a member leaves a Discord server where the bot is present.",
+      input: {
+        guildId: textInput({
+          label: "Server ID (Optional)",
+          description:
+            "Only trigger for members leaving this specific server/guild (leave empty for all servers).",
+          placeholder: "987654321098765432",
+        }),
+      },
+      output: {
+        userId: "string",
+        username: "string",
+        guildId: "string",
+        guildName: "string",
+        memberCount: "number",
+        leftAt: "string",
+      },
+      run: async (params, ctx) => {
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[discord] WebhookEventsService missing, cannot process events`,
+            "DiscordService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          MEMBER_LEAVE_ACTION_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          return null;
+        }
+
+        const payload = event.payload as Record<string, unknown> | undefined;
+
+        if (!payload) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MEMBER_LEAVE_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Apply filters
+        const guildIdFilter = String(params.guildId ?? "").trim();
+        const guildId = String(payload.guildId ?? "");
+
+        // Filter: guild ID
+        if (guildIdFilter && guildId !== guildIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping member leave ${payload.userId} (wrong server)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            MEMBER_LEAVE_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        ctx.logger?.log?.(
+          `[discord] Member left: ${payload.username} (${payload.userId}) from guild ${payload.guildId}`,
+          "DiscordService",
+        );
+
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          MEMBER_LEAVE_ACTION_ID,
+          event.timestamp,
+        );
+
+        return {
+          userId: String(payload.userId ?? ""),
+          username: String(payload.username ?? ""),
+          guildId: String(payload.guildId ?? ""),
+          guildName: String(payload.guildName ?? ""),
+          memberCount: Number(payload.memberCount ?? 0),
+          leftAt: String(payload.leftAt ?? ""),
+        };
+      },
+    }),
+
+    createAction({
+      id: REACTION_ADDED_ACTION_ID,
+      name: "Reaction Added",
+      description:
+        "Triggered when a reaction is added to a message in a Discord channel where the bot is present.",
+      input: {
+        channelId: textInput({
+          label: "Channel ID (Optional)",
+          description:
+            "Only trigger for reactions in this specific channel (leave empty for all channels).",
+          placeholder: "123456789012345678",
+        }),
+        guildId: textInput({
+          label: "Server ID (Optional)",
+          description:
+            "Only trigger for reactions in this specific server/guild (leave empty for all servers).",
+          placeholder: "987654321098765432",
+        }),
+        emoji: textInput({
+          label: "Emoji Filter (Optional)",
+          description:
+            "Only trigger for this specific emoji (leave empty for all emojis). Use emoji name like '👍' or custom emoji name.",
+          placeholder: "👍",
+        }),
+        userId: textInput({
+          label: "User ID (Optional)",
+          description:
+            "Only trigger when this specific user adds a reaction (leave empty for all users).",
+          placeholder: "123456789012345678",
+        }),
+      },
+      output: {
+        messageId: "string",
+        channelId: "string",
+        guildId: "string",
+        emoji: "string",
+        emojiId: "string",
+        isCustomEmoji: "boolean",
+        reactionCount: "number",
+        userId: "string",
+        username: "string",
+      },
+      run: async (params, ctx) => {
+        if (!ctx.webhookEvents) {
+          ctx.logger?.warn?.(
+            `[discord] WebhookEventsService missing, cannot process events`,
+            "DiscordService",
+          );
+          return null;
+        }
+
+        const event = ctx.webhookEvents.getLastUnprocessedEvent(
+          SERVICE_ID,
+          REACTION_ADDED_ACTION_ID,
+          ctx.userId,
+          ctx.workflowToken,
+        );
+
+        if (!event) {
+          return null;
+        }
+
+        const payload = event.payload as Record<string, unknown> | undefined;
+
+        if (!payload) {
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            REACTION_ADDED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Apply filters
+        const channelIdFilter = String(params.channelId ?? "").trim();
+        const guildIdFilter = String(params.guildId ?? "").trim();
+        const emojiFilter = String(params.emoji ?? "").trim();
+        const userIdFilter = String(params.userId ?? "").trim();
+
+        const channelId = String(payload.channelId ?? "");
+        const guildId = String(payload.guildId ?? "");
+        const emoji = String(payload.emoji ?? "");
+        const userId = String(payload.userId ?? "");
+
+        // Filter: channel ID
+        if (channelIdFilter && channelId !== channelIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping reaction on message ${payload.messageId} (wrong channel)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            REACTION_ADDED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: guild ID
+        if (guildIdFilter && guildId !== guildIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping reaction on message ${payload.messageId} (wrong server)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            REACTION_ADDED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: emoji
+        if (emojiFilter && emoji !== emojiFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping reaction on message ${payload.messageId} (wrong emoji: got ${emoji}, expected ${emojiFilter})`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            REACTION_ADDED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        // Filter: user ID
+        if (userIdFilter && userId !== userIdFilter) {
+          ctx.logger?.log?.(
+            `[discord] Skipping reaction on message ${payload.messageId} (wrong user)`,
+            "DiscordService",
+          );
+          ctx.webhookEvents.markAsProcessed(
+            SERVICE_ID,
+            REACTION_ADDED_ACTION_ID,
+            event.timestamp,
+          );
+          return null;
+        }
+
+        ctx.logger?.log?.(
+          `[discord] Reaction added: ${payload.emoji} on message ${payload.messageId} by ${payload.username}`,
+          "DiscordService",
+        );
+
+        ctx.webhookEvents.markAsProcessed(
+          SERVICE_ID,
+          REACTION_ADDED_ACTION_ID,
+          event.timestamp,
+        );
+
+        return {
+          messageId: String(payload.messageId ?? ""),
+          channelId: String(payload.channelId ?? ""),
+          guildId: String(payload.guildId ?? ""),
+          emoji: String(payload.emoji ?? ""),
+          emojiId: String(payload.emojiId ?? ""),
+          isCustomEmoji: Boolean(payload.isCustomEmoji),
+          reactionCount: Number(payload.reactionCount ?? 0),
+          userId: String(payload.userId ?? ""),
+          username: String(payload.username ?? ""),
         };
       },
     }),
@@ -813,87 +752,53 @@ export default createService({
           placeholder: "https://example.com/avatar.png",
         }),
       },
-      output: {
-        delivered: "boolean",
-        status: "string",
-        messageId: "string",
-        usedFallback: "boolean",
-        responseBody: "object",
-      },
       run: async (params, ctx) => {
         const webhookUrl = ensureWebhookUrl(params.webhookUrl);
-
-        const previousOutput =
-          (ctx.previousOutput as Record<string, unknown> | null) ?? undefined;
         const { content, usedFallback } = resolveContent(
           params.content,
-          previousOutput,
+          ctx.previousOutput as Record<string, unknown> | undefined,
         );
+        const username =
+          typeof params.username === "string" && params.username.trim()
+            ? params.username.trim()
+            : undefined;
+        const avatarUrl =
+          typeof params.avatarUrl === "string" && params.avatarUrl.trim()
+            ? params.avatarUrl.trim()
+            : undefined;
 
-        const payload: Record<string, unknown> = {
-          content,
-        };
-
-        const username = String(params.username ?? "").trim();
+        const body: Record<string, unknown> = { content };
         if (username) {
-          payload.username = username;
+          body.username = username;
         }
-
-        const avatarUrl = String(params.avatarUrl ?? "").trim();
         if (avatarUrl) {
-          payload.avatar_url = avatarUrl;
+          body.avatar_url = avatarUrl;
         }
 
-
-        let response: Response;
-        try {
-          response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-        } catch (error) {
-          ctx.logger?.error?.(
-            `[discord] Failed to reach webhook: ${error instanceof Error ? error.message : String(error)}`,
-            "DiscordService",
-          );
-          throw new Error("Failed to send request to Discord webhook");
-        }
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
 
         if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          ctx.logger?.warn?.(
-            `[discord] Webhook responded with ${response.status}: ${errorText}`,
-            "DiscordService",
-          );
+          const errorText = await response.text();
           throw new Error(
-            `Discord webhook returned ${response.status}${errorText ? `: ${errorText}` : ""}`,
+            `Failed to send Discord message: ${response.status} ${errorText}`,
           );
         }
 
-        const responseBody =
-          response.status === 204
-            ? null
-            : await response
-                .json()
-                .catch(() => null as Record<string, unknown> | null);
-
-        const messageId =
-          (responseBody && typeof responseBody === "object"
-            ? (responseBody as Record<string, unknown>).id
-            : null) ?? "";
-
         ctx.logger?.log?.(
-          `[discord] Message delivered${messageId ? ` (id: ${messageId})` : ""}`,
+          `[discord] Sent message via webhook${usedFallback ? " (used fallback content from previous step)" : ""}`,
           "DiscordService",
         );
 
         return {
-          delivered: true,
-          status: String(response.status),
-          messageId: String(messageId || ""),
+          success: true,
+          message: content,
           usedFallback,
-          responseBody: responseBody ?? {},
         };
       },
     }),

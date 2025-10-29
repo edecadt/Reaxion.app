@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { AlertTriangle, Bot, CheckCircle, XCircle } from "lucide-react";
 
 import { Alert } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -19,6 +20,7 @@ import {
   getAbout,
   getOAuth2ConnectUrl,
   getServiceConnections,
+  updateServiceMetadata,
   type AboutService,
   type AboutServiceAuth,
   type ServiceConnection,
@@ -263,19 +265,19 @@ function SettingsContent() {
       </div>
 
       {successMessage && (
-        <Alert className="mb-6 bg-green-50 text-green-900 border-green-200">
+        <Alert className="mb-6 bg-green-50 text-green-900 border-green-200 dark:bg-green-950 dark:text-green-100 dark:border-green-800">
           <div className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
-            {successMessage}
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <span>{successMessage}</span>
           </div>
         </Alert>
       )}
 
       {error && (
-        <Alert className="mb-6 bg-red-50 text-red-900 border-red-200">
+        <Alert className="mb-6 bg-red-50 text-red-900 border-red-200 dark:bg-red-950 dark:text-red-100 dark:border-red-800">
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
-            {error}
+            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+            <span>{error}</span>
           </div>
         </Alert>
       )}
@@ -321,10 +323,20 @@ function SettingsContent() {
                       </div>
                     )}
                     {service.connection.isExpired && (
-                      <div className="text-red-600 font-medium">
-                        ⚠️ Token expired
+                      <div className="flex items-center gap-1 text-red-600 font-medium">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span>Token expired</span>
                       </div>
                     )}
+                    {(service.id === "discord" || service.name === "Discord") &&
+                      service.connection.metadata?.botToken && (
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <Bot className="h-4 w-4" />
+                          <span className="font-medium">
+                            Bot token configured
+                          </span>
+                        </div>
+                      )}
                   </div>
                 )}
 
@@ -344,32 +356,36 @@ function SettingsContent() {
                 </div>
 
                 {service.isConnected ? (
-                  <div className="flex gap-2">
-                    {service.connection?.isExpired && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      {service.connection?.isExpired && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleConnect(service)}
+                          disabled={
+                            busyServiceId === (service.id || service.name)
+                          }
+                          className="flex-1"
+                        >
+                          Reconnect
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        onClick={() => handleConnect(service)}
+                        variant="outline"
+                        onClick={() =>
+                          handleDisconnect(service.id || service.name)
+                        }
                         disabled={
                           busyServiceId === (service.id || service.name)
                         }
                         className="flex-1"
                       >
-                        Reconnect
+                        {busyServiceId === (service.id || service.name)
+                          ? "Disconnecting..."
+                          : "Disconnect"}
                       </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        handleDisconnect(service.id || service.name)
-                      }
-                      disabled={busyServiceId === (service.id || service.name)}
-                      className="flex-1"
-                    >
-                      {busyServiceId === (service.id || service.name)
-                        ? "Disconnecting..."
-                        : "Disconnect"}
-                    </Button>
+                    </div>
                   </div>
                 ) : (
                   <Button

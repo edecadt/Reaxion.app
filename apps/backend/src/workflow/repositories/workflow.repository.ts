@@ -132,7 +132,7 @@ export class WorkflowRepository implements OnModuleInit {
             params: node.params as any,
             next: transformNext(node.next) as any,
             position: node.position as any,
-            label: node.label,
+            label: node.label ?? null,
           }));
 
           await tx.workflowNode.createMany({ data: dbNodes });

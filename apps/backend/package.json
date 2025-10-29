@@ -41,6 +41,7 @@
     "@types/passport-google-oauth20": "^2.0.16",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "discord.js": "^14.24.0",
     "express-session": "^1.18.2",
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
