@@ -3,12 +3,9 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat git openssh && corepack enable
 FROM base AS pruner
 COPY . .
-RUN mkdir -p /app/out \
-  && (npx turbo prune --scope=backend --docker --out-dir=/app/out || \
-     (echo "turbo prune failed; falling back to full workspace" && \
-      mkdir -p /app/out/full && \
-      sh -c "tar -cf - . --exclude='./out' | tar -C /app/out/full -xf -" && \
-      cp pnpm-lock.yaml /app/out/pnpm-lock.yaml))
+RUN mkdir -p /app/out/full \
+  && sh -c "tar -cf - . --exclude='./out' | tar -C /app/out/full -xf -" \
+  && cp pnpm-lock.yaml /app/out/pnpm-lock.yaml
 FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
