@@ -27,33 +27,9 @@ async function bootstrap() {
     }),
   );
 
-  const corsOriginsEnv = configService.get<string>('CORS_ORIGINS');
-  const webPort = Number(configService.get<string>('WEB_PORT')) || 8081;
-  const mobilePort = Number(configService.get<string>('MOBILE_PORT')) || 8082;
-  const fallbackOrigins = [
-    `http://localhost:${webPort}`,
-    `http://localhost:${mobilePort}`,
-  ];
-
-  const allowedOrigins = (
-    corsOriginsEnv ? corsOriginsEnv.split(',') : fallbackOrigins
-  )
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
   app.enableCors({
-    origin: (
-      requestOrigin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
-        callback(null, true);
-        return;
-      }
-
-      Logger.warn(`Blocked CORS origin: ${requestOrigin}`, loggerContext);
-      callback(new Error('Not allowed by CORS'));
-    },
+    origin: true,
+    credentials: true,
   });
 
   const rawPort = configService.get<string>('PORT');
