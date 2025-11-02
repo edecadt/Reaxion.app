@@ -28,6 +28,10 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "android:build": {
+      "dependsOn": ["^android:build", "build"],
+      "outputs": ["apps/mobile/android/app/build/outputs/apk/**"]
     }
   }
 }

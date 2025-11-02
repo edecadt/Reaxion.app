@@ -1,5 +1,4 @@
 volumes:
-  apk_shared: {}
   turbo-cache: {}
 
 services:
@@ -75,7 +74,7 @@ services:
       - ./apps/backend:/app/apps/backend:delegated
       - ./packages:/app/packages:delegated
       - turbo-cache:/root/.cache/turbo
-      - apk_shared:/shared-apk
+      - ./shared-apk:/shared-apk:delegated
     ports:
       - "${BACKEND_PORT:-8080}:${BACKEND_PORT:-8080}"
     profiles: ["dev"]
@@ -86,7 +85,7 @@ services:
       dockerfile: apps/mobile/Dockerfile
       target: runner
     volumes:
-      - apk_shared:/shared-apk
+      - ./shared-apk:/shared-apk:delegated
 
   client_web:
     build:
@@ -106,7 +105,7 @@ services:
     ports:
       - "${WEB_PORT:-8081}:${WEB_PORT:-8081}"
     volumes:
-      - apk_shared:/shared-apk
+      - ./shared-apk:/shared-apk:delegated
 
   client_web-dev:
     build:
@@ -140,7 +139,7 @@ services:
       - ./apps/web:/app/apps/web:delegated
       - ./packages:/app/packages:delegated
       - turbo-cache:/root/.cache/turbo
-      - apk_shared:/shared-apk
+      - ./shared-apk:/shared-apk:delegated
     ports:
       - "${WEB_PORT:-8081}:${WEB_PORT:-8081}"
     profiles: ["dev"]

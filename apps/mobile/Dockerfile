@@ -1,68 +1,71 @@
-FROM node:20-bookworm-slim AS base
+FROM --platform=linux/amd64 node:20-bookworm-slim AS workspace
 WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-     openjdk-17-jdk curl unzip git ca-certificates openssh-client \
+    git \
+    ca-certificates \
+    openssh-client \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
-FROM base AS android-sdk
-ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH="$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
-RUN mkdir -p /opt/android-sdk/cmdline-tools \
-  && curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-  && mkdir -p /opt/android-sdk/cmdline-tools/temp \
-  && unzip -q /tmp/cmdtools.zip -d /opt/android-sdk/cmdline-tools/temp \
-  && mv /opt/android-sdk/cmdline-tools/temp/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
-  && rm -rf /opt/android-sdk/cmdline-tools/temp /tmp/cmdtools.zip \
-  && yes | sdkmanager --licenses \
-  && sdkmanager \
-       "platform-tools" \
-       "platforms;android-34" \
-       "build-tools;34.0.0"
-FROM android-sdk AS pruner
-WORKDIR /app
+
 COPY . .
-RUN mkdir -p /app/out \
-  && (npx turbo prune --scope=mobile --docker --out-dir=/app/out || \
-     (echo "turbo prune failed; falling back to full workspace" && \
-      mkdir -p /app/out/full && \
-      sh -c "tar -cf - . --exclude='./out' | tar -C /app/out/full -xf -" && \
-      cp pnpm-lock.yaml /app/out/pnpm-lock.yaml))
-FROM android-sdk AS installer
-WORKDIR /app
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=pruner /app/out/full/ ./
+
 RUN pnpm install --frozen-lockfile
-FROM installer AS builder
+
+FROM --platform=linux/amd64 node:20-bookworm-slim AS android-builder
+WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    openjdk-17-jdk \
+    curl \
+    wget \
+    unzip \
+    git \
+    ca-certificates \
+    openssh-client \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+ENV ANDROID_HOME=/sdk
+ENV ANDROID_SDK_ROOT=/sdk
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$JAVA_HOME/bin:$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+
+RUN mkdir -p /sdk/cmdline-tools \
+  && curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+  && mkdir -p /sdk/cmdline-tools/temp \
+  && unzip -q /tmp/cmdtools.zip -d /sdk/cmdline-tools/temp \
+  && mv /sdk/cmdline-tools/temp/cmdline-tools /sdk/cmdline-tools/latest \
+  && rm -rf /sdk/cmdline-tools/temp /tmp/cmdtools.zip
+
+RUN yes | sdkmanager --licenses --sdk_root=/sdk
+RUN sdkmanager --sdk_root=/sdk \
+      "platform-tools" \
+      "platforms;android-34" \
+      "build-tools;34.0.0"
+
+COPY --from=workspace /app /app
+
 ENV EXPO_NO_TELEMETRY=1
 ENV CI=1
-ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH="$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
-ENV GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx1536m -Dorg.gradle.parallel=false"
-WORKDIR /app/apps/mobile
-RUN pnpm exec expo prebuild -p android --non-interactive || true
-RUN if [ -d "android" ]; then \
-      cd android && \
-      ./gradlew assembleDebug \
-        --no-daemon \
-        --max-workers=1 \
-        -x lint \
-        -x lintVitalRelease \
-        --no-build-cache || echo "Gradle build failed"; \
-    fi
-RUN mkdir -p /tmp/apk && \
-    if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then \
-      cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/apk/client.apk && \
-      echo "APK built successfully"; \
-    else \
-      echo "APK build failed - check logs above" > /tmp/apk/placeholder.txt; \
-    fi
 
-FROM busybox:stable AS runner
+WORKDIR /app/apps/mobile
+
+RUN pnpm install --filter mobile... --frozen-lockfile
+
+RUN pnpm exec expo prebuild -p android --non-interactive || true
+
+RUN cd android && ./gradlew assembleDebug \
+      --no-daemon \
+      --max-workers=1 \
+      -x lint \
+      -x lintVitalRelease
+
+FROM --platform=linux/amd64 busybox:stable AS runner
 VOLUME ["/shared-apk"]
-RUN mkdir -p /shared-apk
-COPY --from=builder /tmp/apk/* /shared-apk/
-CMD ["sh", "-c", "tail -f /dev/null"]
+WORKDIR /app
+COPY --from=android-builder /app/apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk ./client.apk
+
+CMD ["sh", "-c", "mkdir -p /shared-apk && if [ -f /app/client.apk ]; then cp /app/client.apk /shared-apk/client.apk && rm -f /shared-apk/placeholder.txt && echo 'client.apk copied to shared-apk'; else echo 'APK build missing - check build logs' > /shared-apk/placeholder.txt; fi; tail -f /dev/null"]

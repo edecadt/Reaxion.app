@@ -10,7 +10,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "android:build": "pnpm exec expo prebuild -p android --non-interactive && cd android && ./gradlew assembleDebug --no-daemon -x lint -x lintVitalRelease"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
