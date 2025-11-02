@@ -53,15 +53,15 @@ Join our community of developers creating universal apps.
 
 This app expects a backend API base URL.
 
-- Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (example: `http://localhost:8080`).
-- The value is embedded into the app via `app.config.ts` as `extra.apiUrl` and read at runtime.
-- If it is not set, the home screen will show a warning and API calls should be considered disabled.
+- Configure it from the mobile app via **Accueil → Changer d'adresse serveur** or set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (example: `http://localhost:8080`).
+- The value is embedded into the app via `app.config.ts` as `extra.apiUrl` and read at runtime; the in-app setting overrides it and is stored on the device.
+- If no value is set, the home screen shows a warning and API calls remain disabled.
 
 ## Guide d’usage — Création de workflow (mobile)
 
 Pré‑requis backend
 
-- Backend en dev sur `http://localhost:8080` (ou configurez `EXPO_PUBLIC_API_URL`).
+- Backend en dev sur `http://localhost:8080` (ou configurez l'adresse serveur via l'application mobile / `EXPO_PUBLIC_API_URL`).
 - CORS: le backend autorise `http://localhost:8082` par défaut.
 
 Scénarios rapides
@@ -94,7 +94,7 @@ Notes UI
 
 Pré‑requis
 
-- Définissez `EXPO_PUBLIC_API_URL` dans `apps/mobile/.env` (ex: `http://localhost:8080`).
+- Définissez l'adresse du serveur depuis l'application mobile ou dans `apps/mobile/.env` (ex: `http://localhost:8080`).
 
 Accès
 

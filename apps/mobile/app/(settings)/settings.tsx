@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
-import { router } from "expo-router";
+import { Link, router } from "expo-router";
 import type {
   AboutService,
   AboutServiceAuth,
@@ -28,6 +28,7 @@ import {
 } from "../../src/lib/api";
 import { useToast } from "../../src/components/Toast";
 import { useAuth } from "../../src/hooks/useAuth";
+import { useApiConfig } from "../../src/hooks/useApiConfig";
 
 type ServiceWithConnection = AboutService & {
   connection?: ServiceConnection;
@@ -37,6 +38,7 @@ type ServiceWithConnection = AboutService & {
 export default function SettingsPage() {
   const toast = useToast();
   const { token } = useAuth();
+  const { apiUrl } = useApiConfig();
 
   const [services, setServices] = useState<ServiceWithConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -263,6 +265,26 @@ export default function SettingsPage() {
       </View>
 
       <ScrollView style={styles.scrollView}>
+        <Link href="/(settings)/server-config" asChild>
+          <Pressable style={styles.serverCard}>
+            <View style={styles.serverCardHeader}>
+              <View>
+                <Text style={styles.serverCardTitle}>Adresse du serveur</Text>
+                <Text style={styles.serverCardSubtitle}>
+                  {apiUrl
+                    ? `Actuellement : ${apiUrl}`
+                    : "Aucune adresse configurée"}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#6b7280" />
+            </View>
+            <Text style={styles.serverCardHint}>
+              Touchez pour modifier l&apos;URL de l&apos;API utilisée par
+              l&apos;application.
+            </Text>
+          </Pressable>
+        </Link>
+
         {services.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No connectable services found</Text>
@@ -454,6 +476,34 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 16,
+  },
+  serverCard: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+    padding: 16,
+    marginBottom: 16,
+  },
+  serverCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  serverCardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  serverCardSubtitle: {
+    fontSize: 14,
+    color: "#1d4ed8",
+    marginTop: 4,
+  },
+  serverCardHint: {
+    fontSize: 13,
+    color: "#4b5563",
+    marginTop: 8,
   },
   emptyState: {
     paddingVertical: 48,

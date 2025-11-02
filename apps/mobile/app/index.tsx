@@ -10,12 +10,14 @@ import {
 } from "react-native";
 import { isApiConfigured } from "../src/lib/api-config";
 import { useAuth } from "../src/hooks/useAuth";
+import { useApiConfig } from "../src/hooks/useApiConfig";
 
 export default function Home() {
   const apiOk = isApiConfigured();
   const { isAuthenticated, user, loading, logout } = useAuth({
     required: false,
   });
+  const { apiUrl } = useApiConfig();
 
   if (loading) {
     return (
@@ -38,8 +40,23 @@ export default function Home() {
         <View style={[styles.card, styles.errorCard]}>
           <Text style={styles.cardTitle}>API non configurée</Text>
           <Text style={styles.cardText}>
-            Définissez EXPO_PUBLIC_API_URL dans apps/mobile/.env (ex:
-            http://localhost:8080), puis relancez l&apos;app.
+            Définissez l&apos;adresse du serveur Reaxion depuis les paramètres.
+            Vous pouvez utiliser une adresse locale (ex:
+            http://192.168.0.10:8080).
+          </Text>
+          <Link href="/(settings)/server-config" asChild>
+            <Pressable style={styles.linkButton}>
+              <Text style={styles.linkButtonText}>
+                Configurer l&apos;adresse
+              </Text>
+            </Pressable>
+          </Link>
+        </View>
+      ) : null}
+      {apiOk && apiUrl ? (
+        <View style={styles.infoTextWrapper}>
+          <Text style={styles.infoText}>
+            Serveur actuel : <Text style={styles.infoTextStrong}>{apiUrl}</Text>
           </Text>
         </View>
       ) : null}
@@ -79,6 +96,13 @@ export default function Home() {
           </Link>
         </>
       )}
+      <Link href="/(settings)/server-config" asChild>
+        <Pressable style={styles.linkButton}>
+          <Text style={styles.linkButtonText}>
+            Changer d&apos;adresse serveur
+          </Text>
+        </Pressable>
+      </Link>
     </ScrollView>
   );
 }
@@ -139,6 +163,22 @@ const styles = StyleSheet.create({
   code: {
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
   },
+  infoTextWrapper: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "#ecfeff",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#bae6fd",
+    width: "100%",
+    maxWidth: 520,
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#0f172a",
+  },
+  infoTextStrong: {
+    fontWeight: "600",
+  },
   primaryButton: {
     marginTop: 8,
     backgroundColor: "#111827",
@@ -169,6 +209,23 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 16,
     fontWeight: "600",
+    textAlign: "center",
+  },
+  linkButton: {
+    marginTop: 8,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    width: "100%",
+    maxWidth: 300,
+  },
+  linkButtonText: {
+    color: "#111827",
+    fontSize: 15,
+    fontWeight: "500",
     textAlign: "center",
   },
 });

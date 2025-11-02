@@ -1,6 +1,8 @@
 import Constants from "expo-constants";
+import { getRuntimeApiUrl } from "./runtime-config";
 
 export function getApiUrl(): string {
+  const runtimeUrl = getRuntimeApiUrl();
   const fromEnv =
     process.env.EXPO_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -9,11 +11,11 @@ export function getApiUrl(): string {
 
   const fromConfig = (extra?.apiUrl as string | undefined) ?? "";
 
-  const url = (fromEnv || fromConfig || "").trim();
+  const url = (runtimeUrl || fromEnv || fromConfig || "").trim();
 
   if (!url) {
     throw new Error(
-      "API base URL not configured. Set EXPO_PUBLIC_API_URL in apps/mobile/.env",
+      "API base URL not configured. Configure it in the mobile app settings or set EXPO_PUBLIC_API_URL in apps/mobile/.env.",
     );
   }
   return url;

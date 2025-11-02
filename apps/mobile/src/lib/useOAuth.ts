@@ -3,10 +3,9 @@ import * as WebBrowser from "expo-web-browser";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { setAuthToken, setUser } from "./auth";
+import { tryGetApiUrl } from "./api-config";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8080";
 
 export function useOAuth() {
   const router = useRouter();
@@ -15,10 +14,20 @@ export function useOAuth() {
   const openOAuth = async (provider: "google" | "github") => {
     if (loading) return;
 
+    const baseUrl = tryGetApiUrl();
+    if (!baseUrl) {
+      Alert.alert(
+        "Serveur requis",
+        "Configurez l'adresse du serveur dans les paramètres avant de vous connecter.",
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const redirectUrl = `reaxion://auth/callback`;
-      const authUrl = `${API_URL}/auth/${provider}?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+      const normalizedBase = baseUrl.replace(/\/+$/, "");
+      const authUrl = `${normalizedBase}/auth/${provider}?redirect_uri=${encodeURIComponent(redirectUrl)}`;
 
       const result = await WebBrowser.openAuthSessionAsync(
         authUrl,
