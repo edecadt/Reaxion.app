@@ -291,9 +291,10 @@ export class ServiceAuthService {
       );
     }
 
-    const backendUrl =
+    const backendUrlRaw =
       this.configService.get<string>('BACKEND_URL') ||
       `http://localhost:${this.configService.get<string>('PORT') || 8080}`;
+    const backendUrl = backendUrlRaw.replace(/\/+$/, '');
 
     const redirectUri = `${backendUrl}/api/service-auth/callback/${serviceId}`;
 

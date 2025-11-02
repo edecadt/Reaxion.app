@@ -47,7 +47,10 @@ function loadEnvFile(filePath) {
 
 candidatePaths.forEach(loadEnvFile);
 
-const desiredPort = env.PORT ?? env.WEB_PORT ?? '8081';
+const desiredPort =
+  env.WEB_PORT ?? env.NEXT_PORT ?? env.NEXT_PUBLIC_PORT ?? '8081';
+
+env.WEB_PORT = desiredPort;
 env.PORT = desiredPort;
 
 console.log(`${LOGGER_PREFIX} starting Next.js on port ${env.PORT}`);
