@@ -16,12 +16,16 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 RUN pnpm install --frozen-lockfile
 FROM installer AS builder
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 WORKDIR /app
 RUN pnpm turbo build --filter=web
 RUN test -f apps/web/.next/BUILD_ID || test -d apps/web/.next
 FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 ENV PORT=8081
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:20-bookworm-slim AS workspace
+FROM node:20-bookworm-slim AS workspace
 WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -13,7 +13,7 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-FROM --platform=linux/amd64 node:20-bookworm-slim AS android-builder
+FROM node:20-bookworm-slim AS android-builder
 WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
