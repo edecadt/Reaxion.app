@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import type { Express } from 'express';
 
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import session from 'express-session';
@@ -12,6 +13,12 @@ const loggerContext = 'Bootstrap';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  const httpAdapter = app.getHttpAdapter();
+  const server = httpAdapter.getInstance() as Express | undefined;
+  if (server) {
+    server.set('trust proxy', 1);
+  }
 
   app.use(
     session({
