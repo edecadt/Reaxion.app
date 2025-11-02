@@ -32,7 +32,6 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     accessToken: string,
     refreshToken: string,
     profile: any,
-    done: any,
   ): Promise<any> {
     const { displayName, emails, photos } = profile;
     const user = {
@@ -43,6 +42,6 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
       provider: 'github',
       redirectUri: req.query.redirect_uri || null,
     };
-    done(null, user);
+    return user;
   }
 }
