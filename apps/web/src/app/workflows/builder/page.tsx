@@ -29,6 +29,7 @@ import {
   getWorkflows,
   updateWorkflow,
 } from "../../../lib/api";
+import { ServiceIcon } from "../../../components/ui/service-icon";
 import { getAuthToken } from "../../../lib/auth";
 
 type InputMetadata = {
@@ -730,7 +731,12 @@ function WorkflowBuilderContent() {
                         key={service.name}
                         className="rounded-lg border border-transparent bg-[hsl(var(--muted))] p-3 text-sm transition-colors hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--accent))]"
                       >
-                        <div className="font-medium text-[hsl(var(--foreground))]">
+                        <div className="flex items-center gap-2 font-medium text-[hsl(var(--foreground))]">
+                          <ServiceIcon
+                            serviceId={service.id || service.name}
+                            logo={service.logo}
+                            size={16}
+                          />
                           {service.name}
                         </div>
                         <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
@@ -870,16 +876,27 @@ function WorkflowBuilderContent() {
                         .map((s) => ({
                           label: s.name,
                           value: s.name,
+                          icon: (
+                            <ServiceIcon
+                              serviceId={s.id || s.name}
+                              logo={s.logo}
+                              size={16}
+                            />
+                          ),
                         }))}
                       value={selectedNode.data.serviceId || ""}
-                      onChange={(val) =>
+                      onChange={(val) => {
+                        const svc = services.find(
+                          (s) => s.name === val || s.id === val,
+                        );
                         updateSelectedNode({
                           serviceId: val,
+                          serviceLogo: svc?.logo,
                           actionId: undefined,
                           reactionId: undefined,
                           params: {},
-                        })
-                      }
+                        });
+                      }}
                       placeholder="Select service"
                     />
                   </div>

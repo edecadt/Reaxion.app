@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 
 import { cn } from "../../../lib/utils";
+import { ServiceIcon } from "../../ui/service-icon";
 
 export const ActionNode = memo(({ data, selected, id }: NodeProps) => {
   const hasConfig = data.serviceId && data.actionId;
@@ -57,19 +58,28 @@ export const ActionNode = memo(({ data, selected, id }: NodeProps) => {
               : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]",
           )}
         >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 10V3L4 14h7v7l9-11h-7z"
+          {hasConfig ? (
+            <ServiceIcon
+              serviceId={data.serviceId as string}
+              logo={data.serviceLogo as string | undefined}
+              size={20}
+              className="text-white"
             />
-          </svg>
+          ) : (
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+          )}
         </div>
         <div className="flex-1">
           <div className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">

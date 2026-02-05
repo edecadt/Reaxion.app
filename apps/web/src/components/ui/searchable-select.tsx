@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 
-export type Option = { label: string; value: string };
+export type Option = { label: string; value: string; icon?: React.ReactNode };
 
 type SearchableSelectProps = {
   options: Option[];
@@ -41,10 +41,11 @@ export function SearchableSelect({
     maxList: number;
   } | null>(null);
 
-  const selectedLabel = useMemo(
-    () => options.find((o) => o.value === value)?.label ?? "",
+  const selectedOption = useMemo(
+    () => options.find((o) => o.value === value),
     [options, value],
   );
+  const selectedLabel = selectedOption?.label ?? "";
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -132,12 +133,13 @@ export function SearchableSelect({
       >
         <span
           className={cn(
-            "truncate",
+            "flex items-center gap-2 truncate",
             selectedLabel
               ? "text-[hsl(var(--foreground))]"
               : "text-[hsl(var(--muted-foreground))]",
           )}
         >
+          {selectedOption?.icon}
           {selectedLabel || placeholder}
         </span>
         <svg
@@ -206,7 +208,7 @@ export function SearchableSelect({
                     key={opt.value}
                     type="button"
                     className={cn(
-                      "w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]",
+                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]",
                       value === opt.value &&
                         "bg-[hsl(var(--accent))] font-medium text-[hsl(var(--accent-foreground))]",
                     )}
@@ -216,6 +218,7 @@ export function SearchableSelect({
                       setQuery("");
                     }}
                   >
+                    {opt.icon}
                     {opt.label}
                   </button>
                 ))
