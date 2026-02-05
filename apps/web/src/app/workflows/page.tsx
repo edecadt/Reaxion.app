@@ -182,7 +182,7 @@ export default function WorkflowsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {workflows.map((workflow) => {
-              const entryId = computeEntryNode(workflow) ?? "(introuvable)";
+              const entryId = computeEntryNode(workflow) ?? "(not found)";
               const nodesCount = workflow.nodes?.length ?? 0;
               const loadingThis = busyId === workflow.id;
               return (

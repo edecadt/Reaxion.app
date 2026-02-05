@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import type { Workflow } from "@reaxion/common";
+import NextDynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, useRef, Suspense } from "react";
 import type { Node, Edge } from "reactflow";
@@ -14,7 +15,6 @@ import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { MobileWorkflowBuilder } from "../../../components/workflow-builder/MobileWorkflowBuilder";
-import NextDynamic from "next/dynamic";
 const WorkflowCanvas = NextDynamic(
   () =>
     import("../../../components/workflow-builder/WorkflowCanvas").then(
@@ -207,8 +207,10 @@ function WorkflowBuilderContent() {
 
       if (!workflow) {
         console.error("loadWorkflow: Workflow not found");
-        setError("Workflow introuvable");
-        setTimeout(() => router.push("/workflows"), 2000);
+        setError(
+          "Workflow not found. It may have been deleted or you may not have permission to view it.",
+        );
+        setTimeout(() => router.push("/workflows"), 3000);
         return;
       }
 
@@ -254,7 +256,9 @@ function WorkflowBuilderContent() {
       setEdges(flowEdges);
     } catch (err) {
       console.error("Failed to load workflow:", err);
-      setError("Échec du chargement du workflow");
+      setError(
+        "Failed to load workflow. Please check your connection and try refreshing the page.",
+      );
     }
   };
 
@@ -364,13 +368,13 @@ function WorkflowBuilderContent() {
 
   const handleSave = async () => {
     if (!token || !workflowName.trim()) {
-      setError("Veuillez fournir un nom de workflow");
+      setError("Please provide a name for your workflow before saving.");
       setTimeout(() => setError(null), 3000);
       return;
     }
 
     if (nodes.length === 0) {
-      setError("Veuillez ajouter au moins un nœud au workflow");
+      setError("Your workflow is empty. Please add at least one node to save.");
       setTimeout(() => setError(null), 3000);
       return;
     }
@@ -424,8 +428,8 @@ function WorkflowBuilderContent() {
       const message =
         err instanceof Error
           ? err.message
-          : "Échec de la sauvegarde du workflow";
-      setError(message);
+          : "Failed to save workflow. Please check your connection.";
+      setError(`Could not save workflow (${message}). Please try again.`);
       setTimeout(() => setError(null), 5000);
     }
   };
