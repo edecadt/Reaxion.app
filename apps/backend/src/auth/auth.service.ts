@@ -4,6 +4,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma.service';
 import { EmailService } from './email.service';
@@ -31,18 +32,12 @@ type AuthResult = {
 
 @Injectable()
 export class AuthService {
-  private readonly jwtSecret: string;
-  private readonly jwtExpiresIn: string;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly emailService: EmailService,
-  ) {
-    this.jwtSecret =
-      this.config.get<string>('JWT_SECRET') || 'dev_secret_change_me';
-    this.jwtExpiresIn = this.config.get<string>('JWT_EXPIRES_IN') || '7d';
-  }
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(input: RegisterInput): Promise<AuthResult> {
     const email = input.email.trim().toLowerCase();
@@ -64,7 +59,7 @@ export class AuthService {
       },
     });
 
-    const token = this.signJwt({
+    const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
       name: user.name ?? null,
@@ -96,7 +91,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = this.signJwt({
+    const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
       name: user.name ?? null,
@@ -142,42 +137,6 @@ export class AuthService {
       });
     });
     return crypto.timingSafeEqual(derivedKey, expected);
-  }
-
-  private signJwt(payload: Record<string, unknown>): string {
-    const header = { alg: 'HS256', typ: 'JWT' };
-    const now = Math.floor(Date.now() / 1000);
-    const exp = this.computeExpiry(now, this.jwtExpiresIn);
-    const body = { iat: now, exp, ...payload } as Record<string, unknown>;
-
-    const base64url = (obj: unknown) =>
-      Buffer.from(JSON.stringify(obj))
-        .toString('base64')
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_');
-
-    const h = base64url(header);
-    const b = base64url(body);
-    const data = `${h}.${b}`;
-    const sig = crypto
-      .createHmac('sha256', this.jwtSecret)
-      .update(data)
-      .digest('base64')
-      .replace(/=/g, '')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
-    return `${data}.${sig}`;
-  }
-
-  private computeExpiry(now: number, expiresIn: string): number {
-    const match = expiresIn.match(/^(\d+)([smhd])$/);
-    if (!match) return now + 7 * 24 * 3600;
-    const value = Number(match[1]);
-    const unit = match[2];
-    const mult =
-      unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86400;
-    return now + value * mult;
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
@@ -267,7 +226,7 @@ export class AuthService {
       });
     }
 
-    const token = this.signJwt({
+    const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
       name: user.name ?? null,

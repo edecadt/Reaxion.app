@@ -10,6 +10,7 @@ import { ServiceAuthModule } from '../service-auth/service-auth.module';
 import { PrismaService } from '../prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkflowOwnershipGuard } from './guards/workflow-ownership.guard';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { WorkflowOwnershipGuard } from './guards/workflow-ownership.guard';
     forwardRef(() => ServicesModule),
     ServiceAuthModule,
     ConfigModule,
+    AuthModule,
   ],
   controllers: [WorkflowController],
   providers: [
