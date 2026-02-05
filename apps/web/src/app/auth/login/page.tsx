@@ -33,8 +33,23 @@ export default function LoginPage() {
       setUser(data.user);
       window.location.href = "/";
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Login failed";
-      setError(message);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Login failed. Please check your internet connection.";
+      if (message.includes("401") || message.includes("Unauthorized")) {
+        setError(
+          "Invalid email or password. Please verify your credentials and try again.",
+        );
+      } else if (message.includes("404")) {
+        setError(
+          "Authentication service unreachable. Please try again later or contact support.",
+        );
+      } else {
+        setError(
+          `An unexpected error occurred during login (${message}). Please try again or contact support if the problem persists.`,
+        );
+      }
     } finally {
       setLoading(false);
     }

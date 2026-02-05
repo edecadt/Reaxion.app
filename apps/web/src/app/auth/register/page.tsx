@@ -35,8 +35,21 @@ export default function RegisterPage() {
       window.location.href = "/";
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Registration failed";
-      setError(message);
+        err instanceof Error
+          ? err.message
+          : "Registration failed. Please check your network.";
+
+      if (message.includes("409") || message.includes("Conflict")) {
+        setError(
+          "This email address is already in use. Please sign in or use a different email.",
+        );
+      } else if (message.includes("400")) {
+        setError(
+          "Invalid registration details. Please ensure your password meets the requirements and your email is valid.",
+        );
+      } else {
+        setError(`Registration failed (${message}). Please try again shortly.`);
+      }
     } finally {
       setLoading(false);
     }

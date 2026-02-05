@@ -19,9 +19,9 @@ import {
   getWorkflows,
   deleteWorkflow,
 } from "../../lib/api";
+import { getAuthToken } from "../../lib/auth";
 import { cn } from "../../lib/utils";
 import { computeEntryNode } from "../../workflows/utils";
-import { getAuthToken } from "../../lib/auth";
 
 type LoadState = "idle" | "loading" | "error";
 
@@ -48,8 +48,13 @@ export default function WorkflowsPage() {
         setWorkflows(data);
         setState("idle");
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Erreur inconnue";
-        setError(message);
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to load workflows. Please check your connection.";
+        setError(
+          `Could not retrieve your workflows (${message}). Please refresh the page or try again later.`,
+        );
         setState("error");
       }
     },
@@ -76,8 +81,13 @@ export default function WorkflowsPage() {
           prev.map((item) => (item.id === updated.id ? updated : item)),
         );
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Erreur inconnue";
-        setError(message);
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Operation failed. Please check your connection.";
+        setError(
+          `Could not update workflow status (${message}). Please try again.`,
+        );
         setState("error");
       } finally {
         setBusyId(null);
@@ -101,8 +111,13 @@ export default function WorkflowsPage() {
         await deleteWorkflow(workflow.id, token);
         setWorkflows((prev) => prev.filter((w) => w.id !== workflow.id));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Erreur inconnue";
-        setError(message);
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Deletion failed. Please check your connection.";
+        setError(
+          `Could not delete workflow (${message}). Please ensure the workflow is not running and try again.`,
+        );
         setState("error");
       } finally {
         setBusyId(null);

@@ -63,7 +63,8 @@ async function request<T>(
         typeof data === "object" &&
         "message" in (data as Record<string, unknown>)
           ? String((data as Record<string, unknown>).message)
-          : res.statusText) || "Request failed";
+          : res.statusText) ||
+        "Request failed. Please check your network connection and try again.";
       throw new ApiError(message, res.status, data);
     }
 
