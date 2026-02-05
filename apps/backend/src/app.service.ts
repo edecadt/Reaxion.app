@@ -16,6 +16,7 @@ export class AppService {
     const formattedServices = services.map((service) => ({
       id: service.id,
       name: service.name.toLowerCase(),
+      logo: service.logo,
       auth: service.auth,
       actions: service.actions.map((action) => ({
         id: action.id,

@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Bot, CheckCircle, XCircle } from "lucide-react";
 
 import { Alert } from "../../components/ui/alert";
+import { ServiceIcon } from "../../components/ui/service-icon";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
@@ -289,6 +290,11 @@ function SettingsContent() {
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
+                    <ServiceIcon
+                      serviceId={service.id || service.name}
+                      logo={service.logo}
+                      size={20}
+                    />
                     {service.name}
                     {service.isConnected && (
                       <Badge

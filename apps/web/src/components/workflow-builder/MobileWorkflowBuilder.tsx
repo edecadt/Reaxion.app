@@ -5,6 +5,7 @@ import type { Node as FlowNode } from "reactflow";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { ServiceIcon } from "../ui/service-icon";
 import type { AboutService } from "../../lib/api";
 
 type MobileWorkflowBuilderProps = {
@@ -102,28 +103,37 @@ export function MobileWorkflowBuilder({
                             : "bg-gradient-to-br from-emerald-500 to-teal-600"
                         }`}
                       >
-                        <svg
-                          className="w-5 h-5 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          {nodeIsAction ? (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M13 10V3L4 14h7v7l9-11h-7z"
-                            />
-                          ) : (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          )}
-                        </svg>
+                        {node.data.serviceId ? (
+                          <ServiceIcon
+                            serviceId={node.data.serviceId as string}
+                            logo={node.data.serviceLogo as string | undefined}
+                            size={20}
+                            className="text-white"
+                          />
+                        ) : (
+                          <svg
+                            className="w-5 h-5 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            {nodeIsAction ? (
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 10V3L4 14h7v7l9-11h-7z"
+                              />
+                            ) : (
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            )}
+                          </svg>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-gray-500 uppercase">
@@ -190,14 +200,20 @@ export function MobileWorkflowBuilder({
                         id={`service-${node.id}`}
                         className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={node.data.serviceId || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const svc = services.find(
+                            (s) =>
+                              s.name === e.target.value ||
+                              s.id === e.target.value,
+                          );
                           onUpdateNode(node.id, {
                             serviceId: e.target.value,
+                            serviceLogo: svc?.logo,
                             actionId: undefined,
                             reactionId: undefined,
                             params: {},
-                          })
-                        }
+                          });
+                        }}
                       >
                         <option value="">Select service</option>
                         {services

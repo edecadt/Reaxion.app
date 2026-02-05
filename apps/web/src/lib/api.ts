@@ -96,6 +96,7 @@ export type AboutServiceAuth =
 export type AboutService = {
   id?: string;
   name: string;
+  logo?: string;
   auth?: AboutServiceAuth | string;
   actions: {
     id?: string;

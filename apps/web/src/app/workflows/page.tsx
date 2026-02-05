@@ -196,8 +196,9 @@ export default function WorkflowsPage() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          workflow.active &&
-                            "border-[hsl(var(--primary))] text-[hsl(var(--primary))]",
+                          workflow.active
+                            ? "border-green-500 text-green-600 dark:text-green-400"
+                            : "border-red-500 text-red-600 dark:text-red-400",
                         )}
                       >
                         {workflow.active ? "Actif" : "Inactif"}
